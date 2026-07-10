@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>Private Worker Panel</title>
+<style>
+body{
+    background:#111;
+    color:white;
+    font-family:sans-serif;
+    padding:20px;
+}
+
+.card{
+    max-width:500px;
+    margin:auto;
+    background:#222;
+    padding:20px;
+    border-radius:15px;
+}
+
+input,button{
+    width:100%;
+    padding:12px;
+    margin-top:10px;
+    border-radius:8px;
+    border:0;
+}
+
+button{
+    background:#8b5cf6;
+    color:white;
+    cursor:pointer;
+}
+
+#panel{
+    display:none;
+}
+</style>
+</head>
+
+<body>
+
+
+<div class="card" id="login">
+
+<h2>ورود</h2>
+
+<input id="user" placeholder="Username">
+
+<input id="pass" type="password" placeholder="Password">
+
+<button onclick="login()">
+ورود
+</button>
+
+<p id="msg"></p>
+
+</div>
+
+
+
+<div class="card" id="panel">
+
+<h2>
+Private Worker Panel
+</h2>
+
+<p>
+ورود موفق ✅
+</p>
+
+<button onclick="logout()">
+خروج
+</button>
+
+</div>
+
+
+
+<script>
+
+const AUTH =
+"https://YOUR-AUTH-WORKER.workers.dev";
+
+
+async function login(){
+
+let username =
+document.getElementById("user").value;
+
+let password =
+document.getElementById("pass").value;
+
+
+let res =
+await fetch(
+AUTH+"/login",
+{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+username,
+password
+})
+});
+
+
+let data =
+await res.json();
+
+
+if(data.ok){
+
+localStorage.session =
+data.session;
+
+
+document.getElementById("login").style.display="none";
+
+document.getElementById("panel").style.display="block";
+
+}else{
+
+document.getElementById("msg").innerHTML=
+"رمز اشتباه است";
+
+}
+
+}
+
+
+
+function logout(){
+
+localStorage.removeItem("session");
+
+location.reload();
+
+}
+
+</script>
+
+
+</body>
+</html>
