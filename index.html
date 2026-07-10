@@ -1,220 +1,500 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
+
 <head>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
+
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <title>Private Worker Panel</title>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
+
+
 <style>
-    let editor;
 
-
-require.config({
-paths:{
-vs:"https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs"
-}
-});
-
-
-require(["vs/editor/editor.main"],function(){
-
-editor = monaco.editor.create(
-document.getElementById("editor"),
-{
-value:
-`export default {
-async fetch(request, env){
-
-return new Response("Hello Worker");
-
-}
-}`,
-language:"javascript",
-
-theme:"vs-dark",
-
-automaticLayout:true
-}
-);
-
-});
 body{
+    margin:0;
     background:#111;
     color:white;
-    font-family:sans-serif;
-    padding:20px;
+    font-family:tahoma;
 }
 
-.card{
-    max-width:500px;
-    margin:auto;
-    background:#222;
+
+.box{
+
+    max-width:900px;
+    margin:30px auto;
+    background:#1d1d1d;
     padding:20px;
     border-radius:15px;
+
 }
 
+
 input,button{
+
     width:100%;
     padding:12px;
     margin-top:10px;
-    border-radius:8px;
     border:0;
+    border-radius:8px;
+
 }
 
+
 button{
+
     background:#8b5cf6;
     color:white;
     cursor:pointer;
+
 }
 
+
 #panel{
+
     display:none;
+
 }
+
+
+#editor{
+
+    height:500px;
+    margin-top:20px;
+    border-radius:10px;
+    overflow:hidden;
+
+}
+
+
+#msg{
+
+    color:#ff7777;
+
+}
+
+
 </style>
+
 </head>
+
 
 <body>
 
 
-<div class="card" id="login">
+<div class="box" id="loginBox">
 
-<h2>ورود</h2>
 
-<input id="user" placeholder="Username">
+<h2>
+ورود به پنل
+</h2>
 
-<input id="pass" type="password" placeholder="Password">
+
+<input id="username"
+placeholder="Username">
+
+
+<input id="password"
+type="password"
+placeholder="Password">
+
 
 <button onclick="login()">
 ورود
 </button>
 
+
 <p id="msg"></p>
+
 
 </div>
 
 
 
-<div class="card" id="panel">
+
+
+<div class="box" id="panel">
+
 
 <h2>
-Private Worker Panel
+Private Worker IDE 🚀
 </h2>
 
-<div id="editor" style="
-height:500px;
-border:1px solid #333;
-border-radius:10px;
-overflow:hidden;
-"></div>
+
+<div id="editor"></div>
+
 
 <button onclick="saveCode()">
-ذخیره کد
+ذخیره کد 💾
 </button>
 
-<button onclick="deployWorker()">
-Deploy 🚀
-</button>
 
 <button onclick="logout()">
 خروج
 </button>
 
+
 </div>
+
+
 
 
 
 <script>
 
+
 const AUTH =
-"https://YOUR-AUTH-WORKER.workers.dev";
-    async function checkSession(){
-
-const session =
-localStorage.session;
+"https://private-panel-auth.alipviv8698.workers.dev";
 
 
-if(!session){
-    return;
-}
+
+let editor;
 
 
-let res =
-await fetch(
-AUTH+"/check",
-{
-headers:{
-Authorization:session
-}
-});
 
-
-let data =
-await res.json();
-
-
-if(data.ok){
-
-document.getElementById("login").style.display="none";
-
-document.getElementById("panel").style.display="block";
-
-}else{
-
-localStorage.removeItem("session");
-
-}
-
-}
-
-
-checkSession();
-
+// LOGIN
 
 async function login(){
 
+
 let username =
-document.getElementById("user").value;
+document.getElementById("username").value;
+
 
 let password =
-document.getElementById("pass").value;
+document.getElementById("password").value;
+
 
 
 let res =
 await fetch(
 AUTH+"/login",
 {
+
 method:"POST",
+
 headers:{
 "Content-Type":"application/json"
 },
+
 body:JSON.stringify({
+
 username,
 password
+
 })
-});
+
+}
+
+);
+
 
 
 let data =
 await res.json();
 
 
+
 if(data.ok){
+
 
 localStorage.session =
 data.session;
 
 
-document.getElementById("login").style.display="none";
+showPanel();
 
-document.getElementById("panel").style.display="block";
 
 }else{
 
-document.getElementById("msg").innerHTML=
-"رمز اشتباه است";
+
+document.getElementById("msg").innerHTML =
+"اطلاعات اشتباه است";
+
+
+}
+
+
+}
+
+
+
+
+
+// CHECK SESSION
+
+async function check(){
+
+
+let session =
+localStorage.session;
+
+
+if(!session)
+return;
+
+
+
+let res =
+await fetch(
+AUTH+"/check",
+{
+
+headers:{
+
+Authorization:session
 
 }
 
 }
+
+);
+
+
+
+let data =
+await res.json();
+
+
+
+if(data.ok){
+
+showPanel();
+
+}else{
+
+logout();
+
+}
+
+
+}
+
+
+
+
+
+function showPanel(){
+
+
+document.getElementById("loginBox").style.display="none";
+
+
+document.getElementById("panel").style.display="block";
+
+
+initEditor();
+
+
+}
+
+
+
+
+
+
+// MONACO
+
+function initEditor(){
+
+
+if(editor)
+return;
+
+
+
+require.config({
+
+paths:{
+
+vs:
+"https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs"
+
+}
+
+});
+
+
+
+require(
+["vs/editor/editor.main"],
+
+function(){
+
+
+editor =
+monaco.editor.create(
+
+document.getElementById("editor"),
+
+{
+
+
+value:
+`export default {
+
+async fetch(request, env){
+
+return new Response("Hello Worker");
+
+}
+
+}`,
+
+
+
+language:"javascript",
+
+
+theme:"vs-dark",
+
+
+automaticLayout:true
+
+
+}
+
+);
+
+
+
+loadCode();
+
+
+
+}
+
+);
+
+
+}
+
+
+
+
+
+
+
+// LOAD CODE
+
+async function loadCode(){
+
+
+let session =
+localStorage.session;
+
+
+
+let res =
+await fetch(
+
+AUTH+"/load",
+
+{
+
+headers:{
+
+Authorization:session
+
+}
+
+}
+
+);
+
+
+
+let data =
+await res.json();
+
+
+
+if(data.code){
+
+editor.setValue(data.code);
+
+}
+
+
+}
+
+
+
+
+
+
+
+
+// SAVE CODE
+
+async function saveCode(){
+
+
+let session =
+localStorage.session;
+
+
+let code =
+editor.getValue();
+
+
+
+let res =
+await fetch(
+
+AUTH+"/save",
+
+{
+
+method:"POST",
+
+
+headers:{
+
+"Content-Type":"application/json",
+
+Authorization:session
+
+},
+
+
+body:JSON.stringify({
+
+code
+
+})
+
+
+}
+
+);
+
+
+
+let data =
+await res.json();
+
+
+
+if(data.ok){
+
+alert("ذخیره شد ✅");
+
+}else{
+
+alert("خطا ❌");
+
+}
+
+
+}
+
+
+
+
 
 
 
@@ -226,8 +506,14 @@ location.reload();
 
 }
 
+
+
+check();
+
+
 </script>
 
 
 </body>
+
 </html>
