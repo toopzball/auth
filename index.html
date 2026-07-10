@@ -4,13 +4,11 @@
 <head>
 
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Private Worker Panel</title>
 
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.0/min/vs/loader.min.js"></script>
-
 
 <style>
 
@@ -18,20 +16,16 @@ body{
     margin:0;
     background:#111;
     color:white;
-    font-family:tahoma;
+    font-family:tahoma,Arial;
 }
-
 
 .box{
-
-    max-width:900px;
+    max-width:950px;
     margin:30px auto;
-    background:#1d1d1d;
+    background:#1c1c1c;
     padding:20px;
     border-radius:15px;
-
 }
-
 
 input,button{
 
@@ -43,7 +37,6 @@ input,button{
 
 }
 
-
 button{
 
     background:#8b5cf6;
@@ -52,17 +45,19 @@ button{
 
 }
 
+button:hover{
+    opacity:.85;
+}
+
 
 #panel{
-
     display:none;
-
 }
 
 
 #editor{
 
-    height:500px;
+    height:550px;
     margin-top:20px;
     border-radius:10px;
     overflow:hidden;
@@ -71,11 +66,13 @@ button{
 
 
 #msg{
-
     color:#ff7777;
-
 }
 
+
+#status{
+    color:#7cff7c;
+}
 
 </style>
 
@@ -85,11 +82,11 @@ button{
 <body>
 
 
+
 <div class="box" id="loginBox">
 
-
 <h2>
-ورود به پنل
+🔐 Private Login
 </h2>
 
 
@@ -116,19 +113,36 @@ placeholder="Password">
 
 
 
+
 <div class="box" id="panel">
 
 
 <h2>
-Private Worker IDE 🚀
+🚀 Worker Private IDE
 </h2>
+
+
+<p id="status">
+آماده
+</p>
 
 
 <div id="editor"></div>
 
 
+
 <button onclick="saveCode()">
-ذخیره کد 💾
+💾 Save
+</button>
+
+
+<button onclick="deployWorker()">
+🚀 Deploy
+</button>
+
+
+<button onclick="saveDeploy()">
+💾🚀 Save & Deploy
 </button>
 
 
@@ -143,6 +157,8 @@ Private Worker IDE 🚀
 
 
 
+
+
 <script>
 
 
@@ -152,6 +168,8 @@ const AUTH =
 
 
 let editor;
+
+
 
 
 
@@ -181,15 +199,11 @@ headers:{
 },
 
 body:JSON.stringify({
-
 username,
 password
-
 })
 
-}
-
-);
+});
 
 
 
@@ -200,7 +214,6 @@ await res.json();
 
 if(data.ok){
 
-
 localStorage.session =
 data.session;
 
@@ -210,15 +223,15 @@ showPanel();
 
 }else{
 
-
 document.getElementById("msg").innerHTML =
-"اطلاعات اشتباه است";
+"اطلاعات اشتباه است ❌";
+
+}
 
 
 }
 
 
-}
 
 
 
@@ -226,7 +239,7 @@ document.getElementById("msg").innerHTML =
 
 // CHECK SESSION
 
-async function check(){
+async function checkSession(){
 
 
 let session =
@@ -242,15 +255,10 @@ let res =
 await fetch(
 AUTH+"/check",
 {
-
 headers:{
-
 Authorization:session
-
 }
-
 }
-
 );
 
 
@@ -277,11 +285,12 @@ logout();
 
 
 
+
+
 function showPanel(){
 
 
 document.getElementById("loginBox").style.display="none";
-
 
 document.getElementById("panel").style.display="block";
 
@@ -296,7 +305,8 @@ initEditor();
 
 
 
-// MONACO
+
+// MONACO EDITOR
 
 function initEditor(){
 
@@ -332,7 +342,6 @@ document.getElementById("editor"),
 
 {
 
-
 value:
 `export default {
 
@@ -344,16 +353,11 @@ return new Response("Hello Worker");
 
 }`,
 
-
-
 language:"javascript",
-
 
 theme:"vs-dark",
 
-
 automaticLayout:true
-
 
 }
 
@@ -364,45 +368,31 @@ automaticLayout:true
 loadCode();
 
 
+});
+
+
 
 }
 
-);
-
-
-}
 
 
 
 
 
 
-
-// LOAD CODE
+// LOAD
 
 async function loadCode(){
 
 
-let session =
-localStorage.session;
-
-
-
 let res =
 await fetch(
-
 AUTH+"/load",
-
 {
-
 headers:{
-
-Authorization:session
-
+Authorization:localStorage.session
 }
-
 }
-
 );
 
 
@@ -428,45 +418,35 @@ editor.setValue(data.code);
 
 
 
-// SAVE CODE
+// SAVE
 
 async function saveCode(){
 
 
-let session =
-localStorage.session;
-
-
-let code =
-editor.getValue();
+setStatus("در حال ذخیره...");
 
 
 
 let res =
 await fetch(
-
 AUTH+"/save",
-
 {
 
 method:"POST",
-
 
 headers:{
 
 "Content-Type":"application/json",
 
-Authorization:session
+Authorization:localStorage.session
 
 },
 
-
 body:JSON.stringify({
 
-code
+code:editor.getValue()
 
 })
-
 
 }
 
@@ -481,14 +461,99 @@ await res.json();
 
 if(data.ok){
 
-alert("ذخیره شد ✅");
+setStatus("ذخیره شد ✅");
 
 }else{
 
-alert("خطا ❌");
+setStatus("خطا در ذخیره ❌");
 
 }
 
+
+}
+
+
+
+
+
+
+
+// DEPLOY
+
+async function deployWorker(){
+
+
+setStatus("در حال Deploy...");
+
+
+
+let res =
+await fetch(
+AUTH+"/deploy",
+{
+
+method:"POST",
+
+headers:{
+
+Authorization:localStorage.session
+
+}
+
+}
+
+);
+
+
+
+let data =
+await res.json();
+
+
+
+if(data.success){
+
+setStatus("Deploy موفق شد ✅");
+
+}else{
+
+setStatus("خطا در Deploy ❌");
+
+console.log(data);
+
+}
+
+
+}
+
+
+
+
+
+
+
+// SAVE + DEPLOY
+
+async function saveDeploy(){
+
+
+await saveCode();
+
+
+await deployWorker();
+
+
+}
+
+
+
+
+
+
+
+function setStatus(text){
+
+document.getElementById("status").innerHTML=text;
 
 }
 
@@ -508,7 +573,9 @@ location.reload();
 
 
 
-check();
+
+checkSession();
+
 
 
 </script>
