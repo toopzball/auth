@@ -428,7 +428,10 @@ async function pullFromCloudflare(){
       updateCharCount();
       setStatus("کد واقعی از Cloudflare دریافت شد ✅");
     }else{
-      setStatus("خطا در دریافت از Cloudflare ❌ (" + (data.error || "") + ")");
+      let extra = data.status ? (" [HTTP " + data.status + "]") : "";
+      let detailText = data.detail ? (" " + JSON.stringify(data.detail)) : "";
+      setStatus("خطا در دریافت از Cloudflare ❌" + extra + (data.error ? " (" + data.error + ")" : "") + detailText);
+      console.log("Pull error detail:", data);
     }
   }catch(e){
     setStatus("خطا در اتصال ❌");
