@@ -506,8 +506,7 @@ async function deployWorker(){
       setStatus("Deploy موفق شد ✅");
     }else{
       let errText = (data.errors && data.errors.length) ? JSON.stringify(data.errors) : "";
-      let debugText = data.debug_code_preview ? (" | طول: " + data.debug_code_length + " | شروع کد: " + data.debug_code_preview) : "";
-      setStatus("خطا در Deploy ❌ " + errText + debugText);
+      setStatus("خطا در Deploy ❌ " + errText);
       console.log(data);
     }
   }catch(e){
