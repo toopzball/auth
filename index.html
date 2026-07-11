@@ -199,6 +199,7 @@ button:disabled{
   <button onclick="changeFontSize(1)">A+</button>
   <button onclick="changeFontSize(-1)">A-</button>
   <button onclick="toggleFullscreen()" id="fsBtn">⛶ تمام‌صفحه</button>
+  <button onclick="pullFromCloudflare()" title="دریافت کد واقعی از Cloudflare" style="background:#2d5a3d;">🔄 دریافت از Cloudflare</button>
   <span class="grow"></span>
   <button onclick="toggleTheme()" id="themeBtn">☀️ روشن</button>
 </div>
@@ -405,6 +406,33 @@ function toggleTheme(){
   isDarkTheme = !isDarkTheme;
   cm.setOption("theme", isDarkTheme ? "dracula" : "default");
   document.getElementById("themeBtn").innerText = isDarkTheme ? "☀️ روشن" : "🌙 تیره";
+}
+
+// PULL FROM CLOUDFLARE (the actual currently-deployed script, not the local KV cache)
+async function pullFromCloudflare(){
+  if(isDirty){
+    if(!confirm("تغییرات ذخیره‌نشده داری — با دریافت از Cloudflare، این تغییرات از بین می‌رن. ادامه بدم؟")){
+      return;
+    }
+  }
+
+  setStatus("در حال دریافت از Cloudflare...");
+
+  try{
+    let res = await fetch(AUTH+"/pull", { headers:{ Authorization:localStorage.session } });
+    let data = await res.json();
+
+    if(data.ok){
+      cm.setValue(data.code);
+      setDirty(false);
+      updateCharCount();
+      setStatus("کد واقعی از Cloudflare دریافت شد ✅");
+    }else{
+      setStatus("خطا در دریافت از Cloudflare ❌ (" + (data.error || "") + ")");
+    }
+  }catch(e){
+    setStatus("خطا در اتصال ❌");
+  }
 }
 
 // LOAD
