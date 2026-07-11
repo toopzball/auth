@@ -8,23 +8,22 @@
 
 <title>Private Worker Panel</title>
 
-<!-- CodeMirror 6: much lighter and far more reliable on mobile for
-     select-all / cut / large paste operations than Monaco -->
-<script type="importmap">
-{
-  "imports": {
-    "codemirror": "https://esm.sh/codemirror@6.0.1",
-    "@codemirror/lang-javascript": "https://esm.sh/@codemirror/lang-javascript@6.2.2",
-    "@codemirror/theme-one-dark": "https://esm.sh/@codemirror/theme-one-dark@6.1.2",
-    "@codemirror/state": "https://esm.sh/@codemirror/state@6.4.1",
-    "@codemirror/view": "https://esm.sh/@codemirror/view@6.28.0",
-    "@codemirror/commands": "https://esm.sh/@codemirror/commands@6.6.0",
-    "prettier/standalone": "https://esm.sh/prettier@3.3.3/standalone",
-    "prettier/plugins/babel": "https://esm.sh/prettier@3.3.3/plugins/babel",
-    "prettier/plugins/estree": "https://esm.sh/prettier@3.3.3/plugins/estree"
-  }
-}
-</script>
+<!-- CodeMirror 5 from cdnjs: plain <script> tags (no ES modules / import maps),
+     same CDN domain that already works for you. Much more reliable on mobile
+     for select-all / cut / large paste than Monaco, and doesn't depend on
+     esm.sh which can be unreachable on some networks. -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.11/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.11/theme/dracula.min.css">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.11/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.11/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.11/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.11/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.11/addon/selection/active-line.min.js"></script>
+
+<!-- Prettier 2.0.3 from cdnjs: classic global scripts (window.prettier / window.prettierPlugins) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.0.3/standalone.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prettier/2.0.3/parser-babel.js"></script>
 
 <style>
 
@@ -123,7 +122,7 @@ button:disabled{
     display:none;
 }
 
-#editor{
+#editor-wrap{
     height:65vh;
     min-height:400px;
     margin-top:10px;
@@ -132,17 +131,14 @@ button:disabled{
     border:1px solid #333;
 }
 
-#editor .cm-editor{
-    height:100%;
-}
-
-#editor .cm-scroller{
-    overflow:auto;
-    font-family:"Fira Code","Consolas",monospace;
-}
-
-#panel.fullscreen #editor{
+#panel.fullscreen #editor-wrap{
     height:calc(100vh - 220px);
+}
+
+.CodeMirror{
+    height:100% !important;
+    direction:ltr;
+    text-align:left;
 }
 
 #msg{
@@ -207,7 +203,7 @@ button:disabled{
   <button onclick="toggleTheme()" id="themeBtn">☀️ روشن</button>
 </div>
 
-<div id="editor"></div>
+<div id="editor-wrap"><textarea id="editor"></textarea></div>
 
 <div id="statusbar">
   <span id="cursorPos">Ln 1, Col 1</span>
@@ -224,89 +220,16 @@ button:disabled{
 </div>
 
 
-<script type="module">
-
-import { EditorView, basicSetup } from "codemirror";
-import { javascript } from "@codemirror/lang-javascript";
-import { oneDark } from "@codemirror/theme-one-dark";
-import { Compartment, EditorState } from "@codemirror/state";
-import { keymap } from "@codemirror/view";
-import { indentWithTab } from "@codemirror/commands";
-import * as prettier from "prettier/standalone";
-import prettierBabel from "prettier/plugins/babel";
-import prettierEstree from "prettier/plugins/estree";
+<script>
 
 const AUTH = "https://private-panel-auth.alipviv8698.workers.dev";
 
-let view;
+let cm;
 let isDirty = false;
 let wordWrap = false;
 let isFullscreen = false;
 let isDarkTheme = true;
 let fontSize = 14;
-
-const wrapCompartment = new Compartment();
-const themeCompartment = new Compartment();
-const fontCompartment = new Compartment();
-
-function fontTheme(size){
-  return EditorView.theme({ "&": { fontSize: size + "px" } });
-}
-
-function getValue(){
-  return view.state.doc.toString();
-}
-
-function setValue(text){
-  view.dispatch({
-    changes: { from: 0, to: view.state.doc.length, insert: text }
-  });
-}
-
-function saveShortcut(){
-  saveCode();
-  return true;
-}
-
-function saveDeployShortcut(){
-  saveDeploy();
-  return true;
-}
-
-function buildEditor(initialValue){
-  view = new EditorView({
-    state: EditorState.create({
-      doc: initialValue,
-      extensions: [
-        basicSetup,
-        javascript(),
-        keymap.of([
-          indentWithTab,
-          { key: "Mod-s", run: saveShortcut, preventDefault: true },
-          { key: "Mod-Enter", run: saveDeployShortcut, preventDefault: true }
-        ]),
-        wrapCompartment.of([]),
-        themeCompartment.of(oneDark),
-        fontCompartment.of(fontTheme(fontSize)),
-        EditorView.updateListener.of((update)=>{
-          if(update.docChanged){
-            setDirty(true);
-            updateCharCount();
-          }
-          if(update.selectionSet || update.docChanged){
-            const pos = update.state.selection.main.head;
-            const line = update.state.doc.lineAt(pos);
-            document.getElementById("cursorPos").innerText =
-              `Ln ${line.number}, Col ${pos - line.from + 1}`;
-          }
-        })
-      ]
-    }),
-    parent: document.getElementById("editor")
-  });
-
-  updateCharCount();
-}
 
 // LOGIN
 async function login(){
@@ -354,14 +277,39 @@ async function checkSession(){
 function showPanel(){
   document.getElementById("loginBox").style.display="none";
   document.getElementById("panel").style.display="block";
-  initEditor();
+  // wait a tick so the panel has real layout/size before CodeMirror measures it
+  setTimeout(initEditor, 0);
 }
 
 // CODEMIRROR EDITOR
 function initEditor(){
-  if(view) return;
+  if(cm) return;
 
-  buildEditor(`export default {
+  if(typeof CodeMirror === "undefined"){
+    setStatus("خطا: کتابخانه ادیتور لود نشد ❌ (اتصال اینترنت را چک کن)");
+    return;
+  }
+
+  cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
+    mode:"javascript",
+    theme:"dracula",
+    lineNumbers:true,
+    matchBrackets:true,
+    autoCloseBrackets:true,
+    styleActiveLine:true,
+    tabSize:2,
+    indentUnit:2,
+    indentWithTabs:false,
+    lineWrapping:false,
+    extraKeys:{
+      "Ctrl-S": function(){ saveCode(); return false; },
+      "Cmd-S": function(){ saveCode(); return false; },
+      "Ctrl-Enter": function(){ saveDeploy(); return false; },
+      "Cmd-Enter": function(){ saveDeploy(); return false; }
+    }
+  });
+
+  cm.setValue(`export default {
 
   async fetch(request, env, ctx) {
 
@@ -370,6 +318,19 @@ function initEditor(){
   }
 
 }`);
+
+  cm.getWrapperElement().style.fontSize = fontSize + "px";
+
+  cm.on("change", ()=>{
+    setDirty(true);
+    updateCharCount();
+  });
+
+  cm.on("cursorActivity", ()=>{
+    let pos = cm.getCursor();
+    document.getElementById("cursorPos").innerText =
+      `Ln ${pos.line + 1}, Col ${pos.ch + 1}`;
+  });
 
   window.addEventListener("keydown", (e)=>{
     if(e.key === "F11"){
@@ -385,6 +346,7 @@ function initEditor(){
     }
   });
 
+  updateCharCount();
   loadCode();
 }
 
@@ -394,21 +356,25 @@ function setDirty(val){
 }
 
 function updateCharCount(){
-  if(!view) return;
-  document.getElementById("charCount").innerText = getValue().length + " chars";
+  if(!cm) return;
+  document.getElementById("charCount").innerText = cm.getValue().length + " chars";
 }
 
-async function formatCode(){
-  if(!view) return;
+function formatCode(){
+  if(!cm) return;
+  if(typeof prettier === "undefined" || !window.prettierPlugins || !window.prettierPlugins.babel){
+    setStatus("خطا: کتابخانه Format لود نشد ❌");
+    return;
+  }
   try{
     setStatus("در حال فرمت...");
-    const formatted = await prettier.format(getValue(), {
-      parser: "babel",
-      plugins: [prettierBabel, prettierEstree],
-      semi: true,
-      singleQuote: false
+    const formatted = prettier.format(cm.getValue(), {
+      parser:"babel",
+      plugins:[window.prettierPlugins.babel],
+      semi:true,
+      singleQuote:false
     });
-    setValue(formatted);
+    cm.setValue(formatted);
     setStatus("فرمت شد ✅");
   }catch(e){
     setStatus("خطا در فرمت (احتمالاً سینتکس ناقصه) ❌");
@@ -417,32 +383,27 @@ async function formatCode(){
 
 function toggleWordWrap(){
   wordWrap = !wordWrap;
-  view.dispatch({
-    effects: wrapCompartment.reconfigure(wordWrap ? EditorView.lineWrapping : [])
-  });
+  cm.setOption("lineWrapping", wordWrap);
   document.getElementById("wrapBtn").innerText = "↩ Wrap: " + (wordWrap ? "On" : "Off");
 }
 
 function changeFontSize(delta){
-  if(!view) return;
+  if(!cm) return;
   fontSize = Math.min(28, Math.max(10, fontSize + delta));
-  view.dispatch({
-    effects: fontCompartment.reconfigure(fontTheme(fontSize))
-  });
+  cm.getWrapperElement().style.fontSize = fontSize + "px";
+  cm.refresh();
 }
 
 function toggleFullscreen(){
   isFullscreen = !isFullscreen;
   document.getElementById("panel").classList.toggle("fullscreen", isFullscreen);
   document.getElementById("fsBtn").innerText = isFullscreen ? "⤢ خروج از تمام‌صفحه" : "⛶ تمام‌صفحه";
-  setTimeout(()=>{ if(view) view.requestMeasure(); }, 50);
+  setTimeout(()=>{ if(cm) cm.refresh(); }, 50);
 }
 
 function toggleTheme(){
   isDarkTheme = !isDarkTheme;
-  view.dispatch({
-    effects: themeCompartment.reconfigure(isDarkTheme ? oneDark : [])
-  });
+  cm.setOption("theme", isDarkTheme ? "dracula" : "default");
   document.getElementById("themeBtn").innerText = isDarkTheme ? "☀️ روشن" : "🌙 تیره";
 }
 
@@ -452,7 +413,7 @@ async function loadCode(){
     let res = await fetch(AUTH+"/load", { headers:{ Authorization:localStorage.session } });
     let data = await res.json();
     if(data.code){
-      setValue(data.code);
+      cm.setValue(data.code);
       setDirty(false);
       updateCharCount();
     }
@@ -469,7 +430,7 @@ async function saveCode(){
     let res = await fetch(AUTH+"/save", {
       method:"POST",
       headers:{ "Content-Type":"application/json", Authorization:localStorage.session },
-      body:JSON.stringify({ code: getValue() })
+      body:JSON.stringify({ code: cm.getValue() })
     });
 
     let data = await res.json();
@@ -524,18 +485,6 @@ function logout(){
   localStorage.removeItem("session");
   location.reload();
 }
-
-// expose functions used by inline onclick= handlers, since this is a module
-window.login = login;
-window.saveCode = saveCode;
-window.deployWorker = deployWorker;
-window.saveDeploy = saveDeploy;
-window.logout = logout;
-window.formatCode = formatCode;
-window.toggleWordWrap = toggleWordWrap;
-window.changeFontSize = changeFontSize;
-window.toggleFullscreen = toggleFullscreen;
-window.toggleTheme = toggleTheme;
 
 checkSession();
 
