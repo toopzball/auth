@@ -200,6 +200,7 @@ button:disabled{
   <button onclick="changeFontSize(-1)">A-</button>
   <button onclick="toggleFullscreen()" id="fsBtn">⛶ تمام‌صفحه</button>
   <button onclick="pullFromCloudflare()" title="دریافت کد واقعی از Cloudflare" style="background:#2d5a3d;">🔄 دریافت از Cloudflare</button>
+  <button onclick="clearEditor()" title="پاک کردن همه‌ی کد" style="background:#5a2d2d;">🗑 پاک کردن همه</button>
   <span class="grow"></span>
   <button onclick="toggleTheme()" id="themeBtn">☀️ روشن</button>
 </div>
@@ -408,6 +409,18 @@ function toggleTheme(){
   document.getElementById("themeBtn").innerText = isDarkTheme ? "☀️ روشن" : "🌙 تیره";
 }
 
+function clearEditor(){
+  if(!cm) return;
+  if(!confirm("مطمئنی می‌خوای همه‌ی کد داخل ادیتور پاک بشه؟ (تا وقتی Save نکنی، روی Cloudflare چیزی تغییر نمی‌کنه)")){
+    return;
+  }
+  cm.setValue("");
+  cm.focus();
+  setDirty(true);
+  updateCharCount();
+  setStatus("ادیتور پاک شد — فراموش نکن اگه لازم داری Save/Deploy کنی");
+}
+
 // PULL FROM CLOUDFLARE (the actual currently-deployed script, not the local KV cache)
 async function pullFromCloudflare(){
   if(isDirty){
@@ -492,7 +505,8 @@ async function deployWorker(){
     if(data.success){
       setStatus("Deploy موفق شد ✅");
     }else{
-      setStatus("خطا در Deploy ❌");
+      let errText = (data.errors && data.errors.length) ? JSON.stringify(data.errors) : "";
+      setStatus("خطا در Deploy ❌ " + errText);
       console.log(data);
     }
   }catch(e){
