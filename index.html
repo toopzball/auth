@@ -201,6 +201,7 @@ button:disabled{
   <button onclick="toggleFullscreen()" id="fsBtn">⛶ تمام‌صفحه</button>
   <button onclick="pullFromCloudflare()" title="دریافت کد واقعی از Cloudflare" style="background:#2d5a3d;">🔄 دریافت از Cloudflare</button>
   <button onclick="clearEditor()" title="پاک کردن همه‌ی کد" style="background:#5a2d2d;">🗑 پاک کردن همه</button>
+     <button onclick="copyEditor()">📋 کپی همه</button>
   <span class="grow"></span>
   <button onclick="toggleTheme()" id="themeBtn">☀️ روشن</button>
 </div>
@@ -420,7 +421,20 @@ function clearEditor(){
   updateCharCount();
   setStatus("ادیتور پاک شد — فراموش نکن اگه لازم داری Save/Deploy کنی");
 }
+async function copyEditor() {
+  if (!cm) return;
 
+  try {
+    await navigator.clipboard.writeText(cm.getValue());
+    setStatus("📋 تمام کد کپی شد ✅");
+  } catch (e) {
+    // حالت قدیمی مرورگرها
+    cm.execCommand("selectAll");
+    document.execCommand("copy");
+    cm.setCursor(cm.firstLine(), 0);
+    setStatus("📋 تمام کد کپی شد ✅");
+  }
+       }
 // PULL FROM CLOUDFLARE (the actual currently-deployed script, not the local KV cache)
 async function pullFromCloudflare(){
   if(isDirty){
