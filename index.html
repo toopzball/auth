@@ -202,6 +202,7 @@ button:disabled{
   <button onclick="pullFromCloudflare()" title="دریافت کد واقعی از Cloudflare" style="background:#2d5a3d;">🔄 دریافت از Cloudflare</button>
   <button onclick="clearEditor()" title="پاک کردن همه‌ی کد" style="background:#5a2d2d;">🗑 پاک کردن همه</button>
      <button onclick="copyEditor()">📋 کپی همه</button>
+     <button onclick="downloadJS()">⬇️ دانلود JS</button>
   <span class="grow"></span>
   <button onclick="toggleTheme()" id="themeBtn">☀️ روشن</button>
 </div>
@@ -435,6 +436,24 @@ async function copyEditor() {
     setStatus("📋 تمام کد کپی شد ✅");
   }
        }
+     function downloadJS() {
+  if (!cm) return;
+
+  const code = cm.getValue();
+  const blob = new Blob([code], { type: "application/javascript" });
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "index.js";
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(a.href);
+
+  setStatus("⬇️ فایل index.js دانلود شد ✅");
+     }
 // PULL FROM CLOUDFLARE (the actual currently-deployed script, not the local KV cache)
 async function pullFromCloudflare(){
   if(isDirty){
