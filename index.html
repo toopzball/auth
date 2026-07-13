@@ -216,7 +216,9 @@ button:disabled{
 
 <div class="tabs">
   <button class="tab-btn active" id="tabWorker" onclick="switchTarget('worker')">⚙️ Worker</button>
-  <button class="tab-btn" id="tabGithub" onclick="switchTarget('github')">🌐 index.html (GitHub)</button>
+  <button class="tab-btn" id="tabGithub" onclick="switchTarget('github')">📁 فایل‌های گیت‌هاب</button>
+  <button class="tab-btn" id="tabVars" onclick="switchTarget('vars')">🔑 Secrets & Vars</button>
+  <button class="tab-btn" id="tabDb" onclick="switchTarget('db')">🗄 دیتابیس</button>
 </div>
 
 <p id="status"><span class="dirty-dot" id="dirtyDot">●</span>آماده</p>
@@ -228,11 +230,22 @@ button:disabled{
   <button onclick="changeFontSize(-1)">A-</button>
   <button onclick="toggleFullscreen()" id="fsBtn">⛶ تمام‌صفحه</button>
   <button onclick="pullCurrent()" title="دریافت کد واقعی" id="pullBtn" style="background:#2d5a3d;">🔄 دریافت از Cloudflare</button>
+  <button onclick="toggleFileDrawer()" id="drawerBtn" title="فایل‌های پروژه گیت‌هاب" style="display:none; background:#3d3d5a;">📁 فایل‌ها</button>
   <button onclick="clearEditor()" title="پاک کردن همه‌ی کد" style="background:#5a2d2d;">🗑 پاک کردن همه</button>
      <button onclick="copyEditor()">📋 کپی همه</button>
      <button onclick="downloadJS()">⬇️ دانلود JS</button>
   <span class="grow"></span>
   <button onclick="toggleTheme()" id="themeBtn">☀️ روشن</button>
+</div>
+
+<div id="fileDrawer" style="display:none; margin-top:10px; background:#151515; border-radius:8px; padding:10px; max-height:280px; overflow:auto; border:1px solid #333;">
+  <div class="btn-row">
+    <button onclick="loadGithubTree()" style="background:#2a2a2a;">🔄 بروزرسانی لیست</button>
+  </div>
+  <p style="font-size:11px; color:#888; margin:8px 0 4px;">
+    روی اسم فایل بزن تا تو ادیتور باز بشه. تیک بزن یعنی فایل برای حذف علامت‌گذاری بشه (تا وقتی «پوش همه» رو نزنی چیزی واقعاً حذف نمی‌شه).
+  </p>
+  <div id="fileTreeList" style="margin-top:6px; font-size:13px;"></div>
 </div>
 
 <div id="editor-wrap"><textarea id="editor"></textarea></div>
@@ -249,7 +262,64 @@ button:disabled{
 </div>
 
 <div class="btn-row" id="githubButtons" style="display:none; margin-top:15px;">
-<button onclick="commitToGithub()">💾 Commit به GitHub (Ctrl+S)</button>
+<button onclick="pushAllGithubChanges()">🚀 پوش همه‌ی تغییرات</button>
+</div>
+
+<!-- SECRETS & VARS PANEL -->
+<div id="varsPanel" style="display:none; margin-top:15px;">
+
+  <div class="btn-row">
+    <button onclick="loadVars()" style="background:#2d5a3d;">🔄 بارگذاری لیست</button>
+  </div>
+
+  <div id="varsList" style="margin-top:14px; font-size:13px;">هنوز بارگذاری نشده — روی «بارگذاری لیست» بزن.</div>
+
+  <h3 style="margin-top:22px; margin-bottom:6px; font-size:15px; color:#ccc;">➕ افزودن / ویرایش متغیر</h3>
+
+  <input id="varName" placeholder="اسم متغیر (مثلاً TELEGRAM_BOT_TOKEN)">
+
+  <select id="varType" style="width:100%; padding:12px; margin-top:10px; border-radius:8px; background:#2a2a2a; color:white; border:1px solid #333;">
+    <option value="plain_text">📝 Plain Variable (متن ساده، قابل مشاهده)</option>
+    <option value="secret_text">🔒 Secret (مخفی، غیرقابل مشاهده بعد از ذخیره)</option>
+  </select>
+
+  <input id="varValue" placeholder="مقدار">
+
+  <div class="btn-row">
+    <button onclick="setVar()">💾 ذخیره متغیر</button>
+  </div>
+
+  <p style="font-size:12px; color:#888; margin-top:10px;">
+    توجه: این تغییرات فقط روی ورکر مقصد (TARGET_WORKER) اعمال می‌شه و کد فعلی رو دست نمی‌زنه.
+    مقدار Secret بعد از ذخیره دیگه هیچ‌جا نمایش داده نمی‌شه (محدودیت خود Cloudflare).
+  </p>
+
+</div>
+
+<!-- DATABASE (D1) PANEL -->
+<div id="dbPanel" style="display:none; margin-top:15px;">
+
+  <div class="btn-row">
+    <button onclick="loadTables()" style="background:#2d5a3d;">🔄 لیست جدول‌ها</button>
+  </div>
+
+  <div id="tablesList" style="margin-top:12px; font-size:13px; color:#aaa;"></div>
+
+  <h3 style="margin-top:20px; margin-bottom:6px; font-size:15px; color:#ccc;">🧾 اجرای Query</h3>
+
+  <textarea id="sqlBox" placeholder="SELECT * FROM posts LIMIT 20;" style="width:100%; min-height:110px; padding:12px; border-radius:8px; background:#151515; color:#7cff7c; border:1px solid #333; font-family:monospace, monospace; direction:ltr; text-align:left; font-size:14px;"></textarea>
+
+  <div class="btn-row">
+    <button onclick="runQuery()" style="background:#8b5cf6;">▶️ اجرای Query</button>
+  </div>
+
+  <div id="queryResult" style="margin-top:16px; overflow:auto; max-height:50vh;"></div>
+
+  <p style="font-size:12px; color:#888; margin-top:10px;">
+    نیازمند متغیر TARGET_D1_DATABASE_ID روی این ورکر (auth) و دسترسی D1:Edit روی CF_API_TOKEN.
+    قبل از DELETE/UPDATE/DROP/ALTER یه تأییدیه اضافه ازت گرفته می‌شه.
+  </p>
+
 </div>
 
 <div class="btn-row" style="margin-top:15px;">
@@ -271,6 +341,21 @@ let isDarkTheme = true;
 let fontSize = 14;
 let currentTarget = "worker";
 let githubSha = null;
+
+// multi-file GitHub drawer state
+let githubFiles = [];        // [{path, sha, size}]
+let fileDrafts = {};         // path -> { content, sha, dirty }
+let stagedDeletes = new Set();
+let openFilePath = null;
+
+const BINARY_EXT = /\.(png|jpe?g|gif|webp|ico|bmp|woff2?|ttf|otf|eot|mp3|mp4|mov|webm|pdf|zip|rar|7z|gz|tar)$/i;
+
+function modeForPath(path){
+  if(/\.(html?|htm)$/i.test(path)) return "htmlmixed";
+  if(/\.css$/i.test(path)) return "css";
+  if(/\.(js|mjs|cjs|json)$/i.test(path)) return "javascript";
+  return "text/plain";
+}
 
 // LOGIN
 async function login(){
@@ -345,8 +430,8 @@ function initEditor(){
     extraKeys:{
       "Ctrl-S": function(){ saveCurrent(); return false; },
       "Cmd-S": function(){ saveCurrent(); return false; },
-      "Ctrl-Enter": function(){ if(currentTarget === "worker") saveDeploy(); else commitToGithub(); return false; },
-      "Cmd-Enter": function(){ if(currentTarget === "worker") saveDeploy(); else commitToGithub(); return false; }
+      "Ctrl-Enter": function(){ if(currentTarget === "worker") saveDeploy(); else pushAllGithubChanges(); return false; },
+      "Cmd-Enter": function(){ if(currentTarget === "worker") saveDeploy(); else pushAllGithubChanges(); return false; }
     }
   });
 
@@ -365,6 +450,11 @@ function initEditor(){
   cm.on("change", ()=>{
     setDirty(true);
     updateCharCount();
+    if(currentTarget === "github" && openFilePath){
+      fileDrafts[openFilePath] = fileDrafts[openFilePath] || {};
+      fileDrafts[openFilePath].dirty = true;
+      fileDrafts[openFilePath].content = cm.getValue();
+    }
   });
 
   cm.on("cursorActivity", ()=>{
@@ -502,15 +592,16 @@ async function copyEditor() {
 function saveCurrent(){
   if(currentTarget === "worker"){
     saveCode();
-  }else{
-    commitToGithub();
+  }else if(currentTarget === "github"){
+    setStatus("✅ تغییرات این فایل محلی ذخیره شد — برای اعمال واقعی روی گیت‌هاب «پوش همه‌ی تغییرات» رو بزن");
   }
 }
 
 function switchTarget(target){
   if(target === currentTarget) return;
 
-  if(isDirty){
+  const leavingCodeTab = (currentTarget === "worker" || currentTarget === "github");
+  if(leavingCodeTab && isDirty){
     if(!confirm("تغییرات ذخیره‌نشده داری — با عوض‌کردن تب از بین می‌رن. ادامه بدم؟")){
       return;
     }
@@ -520,72 +611,212 @@ function switchTarget(target){
 
   document.getElementById("tabWorker").classList.toggle("active", target === "worker");
   document.getElementById("tabGithub").classList.toggle("active", target === "github");
+  document.getElementById("tabVars").classList.toggle("active", target === "vars");
+  document.getElementById("tabDb").classList.toggle("active", target === "db");
+
+  const isCodeTab = (target === "worker" || target === "github");
+
+  document.querySelector(".toolbar").style.display = isCodeTab ? "flex" : "none";
+  document.getElementById("editor-wrap").style.display = isCodeTab ? "block" : "none";
+  document.getElementById("statusbar").style.display = isCodeTab ? "flex" : "none";
   document.getElementById("workerButtons").style.display = target === "worker" ? "flex" : "none";
   document.getElementById("githubButtons").style.display = target === "github" ? "flex" : "none";
-  document.getElementById("pullBtn").innerText = target === "worker" ? "🔄 دریافت از Cloudflare" : "🔄 دریافت از GitHub";
-
-  cm.setOption("mode", target === "worker" ? "javascript" : "htmlmixed");
+  document.getElementById("varsPanel").style.display = target === "vars" ? "block" : "none";
+  document.getElementById("dbPanel").style.display = target === "db" ? "block" : "none";
+  document.getElementById("drawerBtn").style.display = target === "github" ? "inline-block" : "none";
+  if(target !== "github") document.getElementById("fileDrawer").style.display = "none";
 
   if(target === "worker"){
+    document.getElementById("pullBtn").innerText = "🔄 دریافت از Cloudflare";
+    cm.setOption("mode", "javascript");
     loadCode();
-  }else{
-    loadFromGithub();
+  }else if(target === "github"){
+    document.getElementById("pullBtn").innerText = "🔄 دریافت دوباره فایل";
+    if(!openFilePath){
+      openGithubFile("index.html");
+    }else{
+      cm.setOption("mode", modeForPath(openFilePath));
+      const draft = fileDrafts[openFilePath];
+      if(draft){
+        cm.setValue(draft.content);
+        setDirty(!!draft.dirty);
+        updateCharCount();
+      }
+    }
+    if(githubFiles.length === 0) loadGithubTree();
   }
+  // vars/db tabs load on-demand via their own buttons, not automatically
 }
 
 function pullCurrent(){
   if(currentTarget === "worker"){
     pullFromCloudflare();
-  }else{
-    loadFromGithub();
+  }else if(currentTarget === "github"){
+    pullCurrentGithubFile();
   }
 }
 
-// GITHUB LOAD
-async function loadFromGithub(){
-  setStatus("در حال دریافت از GitHub...");
+// ===== GITHUB FILE DRAWER (browse/edit/delete/push any file in the repo) =====
+
+function toggleFileDrawer(){
+  const el = document.getElementById("fileDrawer");
+  const showing = el.style.display !== "none";
+  el.style.display = showing ? "none" : "block";
+  if(!showing && githubFiles.length === 0){
+    loadGithubTree();
+  }
+}
+
+async function loadGithubTree(){
+  const box = document.getElementById("fileTreeList");
+  box.innerHTML = "در حال بارگذاری...";
 
   try{
-    let res = await fetch(AUTH+"/github/load", { headers:{ Authorization:localStorage.session } });
+    let res = await fetch(AUTH+"/github/tree", { headers:{ Authorization: localStorage.session } });
     let data = await res.json();
 
-    if(data.ok){
-      cm.setValue(data.code);
-      githubSha = data.sha;
-      setDirty(false);
-      updateCharCount();
-      setStatus("index.html از GitHub دریافت شد ✅");
-    }else{
-      let extra = data.status ? (" [HTTP " + data.status + "]") : "";
-      setStatus("خطا در دریافت از GitHub ❌" + extra + (data.error ? " (" + data.error + ")" : ""));
-      console.log("GitHub load error:", data);
+    if(!data.ok){
+      box.innerHTML = "خطا: " + escapeHtml(data.error || "");
+      return;
     }
+
+    githubFiles = data.files || [];
+    renderFileTree();
+  }catch(e){
+    box.innerHTML = "خطا در اتصال ❌";
+  }
+}
+
+function renderFileTree(){
+  const box = document.getElementById("fileTreeList");
+
+  if(!githubFiles.length){
+    box.innerHTML = "فایلی پیدا نشد.";
+    return;
+  }
+
+  let html = "";
+  for(const f of githubFiles){
+    const isBinary = BINARY_EXT.test(f.path);
+    const isOpen = f.path === openFilePath;
+    const isDirty = fileDrafts[f.path] && fileDrafts[f.path].dirty;
+    const isDeleted = stagedDeletes.has(f.path);
+
+    html += `<div style="display:flex; align-items:center; gap:8px; padding:5px 2px; border-bottom:1px solid #292929; ${isDeleted ? "opacity:.45; text-decoration:line-through;" : ""}">
+      <input type="checkbox" data-path="${escapeHtml(f.path)}" class="fileCheckbox" ${isDeleted ? "checked" : ""} style="width:auto; margin:0;">
+      <span onclick="${isBinary ? "" : `openGithubFile('${escapeHtml(f.path)}')`}" style="flex:1; direction:ltr; text-align:left; cursor:${isBinary ? "default" : "pointer"}; color:${isOpen ? "#8b5cf6" : (isBinary ? "#666" : "#eee")};">
+        ${isBinary ? "🔒" : "📄"} ${escapeHtml(f.path)} ${isDirty ? '<span style="color:#ffcc55;">●</span>' : ""}
+      </span>
+    </div>`;
+  }
+
+  box.innerHTML = html;
+
+  box.querySelectorAll(".fileCheckbox").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const p = cb.dataset.path;
+      if(cb.checked) stagedDeletes.add(p); else stagedDeletes.delete(p);
+      renderFileTree();
+    });
+  });
+}
+
+async function openGithubFile(path){
+  if(BINARY_EXT.test(path)){
+    setStatus("این فایل باینریه و با این ابزار قابل ویرایش نیست ❌");
+    return;
+  }
+
+  openFilePath = path;
+
+  // already open/edited earlier in this session — just show the local draft, no re-fetch
+  if(fileDrafts[path] && fileDrafts[path].content !== undefined){
+    cm.setValue(fileDrafts[path].content);
+    cm.setOption("mode", modeForPath(path));
+    setDirty(!!fileDrafts[path].dirty);
+    updateCharCount();
+    setStatus("📄 " + path + " (نسخه‌ی محلی)");
+    renderFileTree();
+    return;
+  }
+
+  setStatus("در حال دریافت " + path + " ...");
+
+  try{
+    let res = await fetch(AUTH+"/github/file?path=" + encodeURIComponent(path), { headers:{ Authorization: localStorage.session } });
+    let data = await res.json();
+
+    if(!data.ok){
+      setStatus("خطا در دریافت فایل ❌ " + escapeHtml(data.error || ""));
+      return;
+    }
+
+    fileDrafts[path] = { content: data.code, sha: data.sha, dirty: false };
+    cm.setValue(data.code);
+    cm.setOption("mode", modeForPath(path));
+    setDirty(false);
+    updateCharCount();
+    setStatus("📄 " + path + " دریافت شد ✅");
+    renderFileTree();
   }catch(e){
     setStatus("خطا در اتصال ❌");
   }
 }
 
-// GITHUB COMMIT
-async function commitToGithub(){
-  setStatus("در حال Commit به GitHub...");
+async function pullCurrentGithubFile(){
+  if(!openFilePath){
+    setStatus("اول یه فایل رو از «📁 فایل‌ها» باز کن");
+    return;
+  }
+  if(fileDrafts[openFilePath] && fileDrafts[openFilePath].dirty){
+    if(!confirm("تغییرات ذخیره‌نشده‌ی همین فایل از بین می‌ره. ادامه بدم؟")) return;
+  }
+  delete fileDrafts[openFilePath];
+  openGithubFile(openFilePath);
+}
+
+async function pushAllGithubChanges(){
+  if(openFilePath && cm && fileDrafts[openFilePath]){
+    fileDrafts[openFilePath].content = cm.getValue();
+  }
+
+  const edits = Object.keys(fileDrafts)
+    .filter(p => fileDrafts[p].dirty && !stagedDeletes.has(p))
+    .map(p => ({ path: p, content: fileDrafts[p].content }));
+
+  const deletes = Array.from(stagedDeletes);
+
+  if(!edits.length && !deletes.length){
+    setStatus("هیچ تغییری برای پوش کردن نیست");
+    return;
+  }
+
+  const summary = `${edits.length} فایل ویرایش، ${deletes.length} فایل حذف`;
+  if(!confirm(`این تغییرات پوش بشه؟ (${summary})`)) return;
+
+  setStatus("در حال Push کردن همه‌ی تغییرات...");
 
   try{
-    let res = await fetch(AUTH+"/github/save", {
+    let res = await fetch(AUTH+"/github/batch-commit", {
       method:"POST",
-      headers:{ "Content-Type":"application/json", Authorization:localStorage.session },
-      body:JSON.stringify({ code: cm.getValue(), message: "Update index.html via Private Panel" })
+      headers:{ "Content-Type":"application/json", Authorization: localStorage.session },
+      body: JSON.stringify({
+        edits,
+        deletes,
+        message: "Batch update via Private Panel (" + summary + ")"
+      })
     });
-
     let data = await res.json();
 
     if(data.ok){
-      setStatus("با موفقیت روی GitHub Commit شد ✅");
+      setStatus("✅ پوش شد (" + summary + ")");
+      for(const e of edits) delete fileDrafts[e.path];
+      for(const p of deletes){ delete fileDrafts[p]; stagedDeletes.delete(p); }
       setDirty(false);
-      githubSha = data.sha || githubSha;
+      loadGithubTree();
     }else{
-      let extra = data.status ? (" [HTTP " + data.status + "]") : "";
-      setStatus("خطا در Commit ❌" + extra + (data.error ? " (" + data.error + ")" : ""));
-      console.log("GitHub commit error:", data);
+      setStatus("خطا در Push ❌ " + escapeHtml(data.error || ""));
+      alert("خطا: " + JSON.stringify(data.detail || data.error || ""));
     }
   }catch(e){
     setStatus("خطا در اتصال ❌");
@@ -689,6 +920,213 @@ async function deployWorker(){
 async function saveDeploy(){
   await saveCode();
   await deployWorker();
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  }[m]));
+}
+
+// ===== SECRETS & VARS =====
+
+async function loadVars(){
+  const box = document.getElementById("varsList");
+  box.innerHTML = "در حال بارگذاری...";
+
+  try{
+    let res = await fetch(AUTH+"/vars/list", { headers:{ Authorization: localStorage.session } });
+    let data = await res.json();
+
+    if(!data.ok){
+      box.innerHTML = "خطا در بارگذاری ❌ " + escapeHtml(data.error || "");
+      return;
+    }
+
+    if(!data.bindings || !data.bindings.length){
+      box.innerHTML = "هیچ متغیر یا Secret ای روی این ورکر تعریف نشده.";
+      return;
+    }
+
+    let html = "<table style='width:100%; border-collapse:collapse;'>";
+    html += "<tr style='color:#999; text-align:right;'><th style='padding:6px;'>نام</th><th style='padding:6px;'>نوع</th><th style='padding:6px;'>مقدار</th><th></th></tr>";
+
+    for(const b of data.bindings){
+      const isSecret = b.type === "secret_text";
+      let val = "";
+      if(isSecret){
+        val = "•••••• (مخفی)";
+      }else if(b.text !== undefined){
+        val = escapeHtml(b.text);
+      }else if(b.json !== undefined){
+        val = escapeHtml(JSON.stringify(b.json));
+      }
+
+      html += `<tr style="border-top:1px solid #333;">
+        <td style="padding:6px; direction:ltr; text-align:left;">${escapeHtml(b.name)}</td>
+        <td style="padding:6px;">${isSecret ? "🔒 Secret" : "📝 Plain"}</td>
+        <td style="padding:6px; direction:ltr; text-align:left; word-break:break-all;">${val}</td>
+        <td style="padding:6px;"><button style="width:auto; padding:6px 10px; background:#5a2d2d; margin-top:0;" onclick="deleteVar('${escapeHtml(b.name)}')">حذف</button></td>
+      </tr>`;
+    }
+
+    html += "</table>";
+    box.innerHTML = html;
+  }catch(e){
+    box.innerHTML = "خطا در اتصال ❌";
+  }
+}
+
+async function setVar(){
+  const name = document.getElementById("varName").value.trim();
+  const type = document.getElementById("varType").value;
+  const value = document.getElementById("varValue").value;
+
+  if(!name){
+    alert("اسم متغیر رو وارد کن");
+    return;
+  }
+
+  setStatus("در حال ذخیره متغیر...");
+
+  try{
+    let res = await fetch(AUTH+"/vars/set", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", Authorization: localStorage.session },
+      body: JSON.stringify({ name, type, value })
+    });
+    let data = await res.json();
+
+    if(data.ok){
+      document.getElementById("varName").value = "";
+      document.getElementById("varValue").value = "";
+      setStatus("متغیر ذخیره شد ✅");
+      loadVars();
+    }else{
+      setStatus("خطا در ذخیره متغیر ❌");
+      alert("خطا: " + (data.error || "") + (data.detail ? "\n" + JSON.stringify(data.detail) : ""));
+    }
+  }catch(e){
+    setStatus("خطا در اتصال ❌");
+  }
+}
+
+async function deleteVar(name){
+  if(!confirm(`مطمئنی می‌خوای "${name}" حذف بشه؟`)) return;
+
+  setStatus("در حال حذف...");
+
+  try{
+    let res = await fetch(AUTH+"/vars/delete", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", Authorization: localStorage.session },
+      body: JSON.stringify({ name })
+    });
+    let data = await res.json();
+
+    if(data.ok){
+      setStatus("حذف شد ✅");
+      loadVars();
+    }else{
+      setStatus("خطا در حذف ❌");
+      alert("خطا: " + (data.error || ""));
+    }
+  }catch(e){
+    setStatus("خطا در اتصال ❌");
+  }
+}
+
+// ===== DATABASE (D1) =====
+
+async function loadTables(){
+  const box = document.getElementById("tablesList");
+  box.innerHTML = "در حال بارگذاری...";
+
+  try{
+    let res = await fetch(AUTH+"/d1/tables", { headers:{ Authorization: localStorage.session } });
+    let data = await res.json();
+
+    if(!data.ok){
+      box.innerHTML = "خطا: " + escapeHtml(data.error || "");
+      return;
+    }
+
+    if(!data.tables || !data.tables.length){
+      box.innerHTML = "جدولی پیدا نشد.";
+      return;
+    }
+
+    const btns = data.tables.map(t =>
+      `<button style="width:auto; margin:4px 4px 0 0; padding:6px 10px; background:#2a2a2a; font-size:12px;" onclick="quickSelect('${escapeHtml(t.name)}')">${escapeHtml(t.name)}</button>`
+    ).join("");
+
+    box.innerHTML = "<div>جدول‌ها (کلیک کن برای SELECT سریع):</div><div style='margin-top:6px; display:flex; flex-wrap:wrap;'>" + btns + "</div>";
+  }catch(e){
+    box.innerHTML = "خطا در اتصال ❌";
+  }
+}
+
+function quickSelect(tableName){
+  document.getElementById("sqlBox").value = `SELECT * FROM ${tableName} LIMIT 50;`;
+}
+
+async function runQuery(){
+  const sql = document.getElementById("sqlBox").value.trim();
+  if(!sql) return;
+
+  const dangerWords = /\b(DELETE|DROP|UPDATE|ALTER|TRUNCATE)\b/i;
+  if(dangerWords.test(sql)){
+    if(!confirm("این Query داده‌ها یا ساختار دیتابیس رو تغییر می‌ده یا پاک می‌کنه. مطمئنی؟")){
+      return;
+    }
+  }
+
+  const resultBox = document.getElementById("queryResult");
+  resultBox.innerHTML = "در حال اجرا...";
+
+  try{
+    let res = await fetch(AUTH+"/d1/query", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", Authorization: localStorage.session },
+      body: JSON.stringify({ sql })
+    });
+    let data = await res.json();
+
+    if(!data.ok){
+      resultBox.innerHTML = "خطا در اجرا ❌ " + escapeHtml(data.error || "") +
+        (data.detail ? "<pre style='white-space:pre-wrap; font-size:11px; color:#ff7777;'>" + escapeHtml(JSON.stringify(data.detail, null, 2)) + "</pre>" : "");
+      return;
+    }
+
+    renderQueryResults(data.results, data.meta);
+  }catch(e){
+    resultBox.innerHTML = "خطا در اتصال ❌";
+  }
+}
+
+function renderQueryResults(rows, meta){
+  const box = document.getElementById("queryResult");
+
+  if(!rows || !rows.length){
+    const changed = meta && typeof meta.changes === "number" ? meta.changes : null;
+    box.innerHTML = `<div style="color:#7cff7c;">✅ اجرا شد.${changed !== null ? " (" + changed + " ردیف تغییر کرد)" : " بدون خروجی."}</div>`;
+    return;
+  }
+
+  const cols = Object.keys(rows[0]);
+  let html = "<table style='width:100%; border-collapse:collapse; font-size:12px; direction:ltr;'>";
+  html += "<tr>" + cols.map(c => `<th style="padding:6px; border-bottom:1px solid #444; text-align:left; color:#999;">${escapeHtml(c)}</th>`).join("") + "</tr>";
+
+  for(const row of rows){
+    html += "<tr>" + cols.map(c => {
+      const v = row[c];
+      return `<td style="padding:6px; border-bottom:1px solid #292929; word-break:break-all;">${v === null ? '<span style="color:#666;">NULL</span>' : escapeHtml(v)}</td>`;
+    }).join("") + "</tr>";
+  }
+
+  html += "</table>";
+  html += `<div style="margin-top:8px; color:#999; font-size:12px; direction:rtl;">${rows.length} ردیف</div>`;
+  box.innerHTML = html;
 }
 
 function setStatus(text){
