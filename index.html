@@ -219,6 +219,7 @@ button:disabled{
   <button class="tab-btn" id="tabGithub" onclick="switchTarget('github')">📁 فایل‌های گیت‌هاب</button>
   <button class="tab-btn" id="tabVars" onclick="switchTarget('vars')">🔑 Secrets & Vars</button>
   <button class="tab-btn" id="tabDb" onclick="switchTarget('db')">🗄 دیتابیس</button>
+  <button class="tab-btn" id="tabPreview" onclick="switchTarget('preview')">📱 پریویو</button>
 </div>
 
 <p id="status"><span class="dirty-dot" id="dirtyDot">●</span>آماده</p>
@@ -315,9 +316,43 @@ button:disabled{
 
   <div id="queryResult" style="margin-top:16px; overflow:auto; max-height:50vh;"></div>
 
-  <p style="font-size:12px; color:#888; margin-top:10px;">
-    نیازمند متغیر TARGET_D1_DATABASE_ID روی این ورکر (auth) و دسترسی D1:Edit روی CF_API_TOKEN.
-    قبل از DELETE/UPDATE/DROP/ALTER یه تأییدیه اضافه ازت گرفته می‌شه.
+</div>
+
+<!-- RESPONSIVE PREVIEW PANEL -->
+<div id="previewPanel" style="display:none; margin-top:15px;">
+
+  <div style="display:flex; gap:8px; margin-bottom:12px;">
+    <input id="previewUrl" placeholder="https://your-site.pages.dev" style="flex:1; direction:ltr; text-align:left; margin-top:0;">
+    <button onclick="loadPreviewUrl()" style="width:auto; padding:0 18px; margin-top:0;">برو</button>
+  </div>
+
+  <div class="btn-row" style="flex-wrap:wrap;">
+    <button onclick="selectDevice('Mobile S',320,568)" style="width:auto; flex:1 1 auto;">📱 Mobile S</button>
+    <button onclick="selectDevice('Mobile',375,667)" style="width:auto; flex:1 1 auto;">📱 Mobile</button>
+    <button onclick="selectDevice('Mobile L',414,896)" style="width:auto; flex:1 1 auto;">📱 Mobile L</button>
+    <button onclick="selectDevice('Tablet',768,1024)" style="width:auto; flex:1 1 auto;">📱 Tablet</button>
+    <button onclick="selectDevice('Laptop',1366,768)" style="width:auto; flex:1 1 auto;">💻 Laptop</button>
+    <button onclick="selectDevice('Desktop',1920,1080)" style="width:auto; flex:1 1 auto;">🖥 Desktop</button>
+  </div>
+
+  <div class="btn-row" style="margin-top:8px;">
+    <input id="customW" type="number" placeholder="عرض" style="width:auto; flex:1; margin-top:0;">
+    <input id="customH" type="number" placeholder="ارتفاع" style="width:auto; flex:1; margin-top:0;">
+    <button onclick="applyCustomSize()" style="width:auto; padding:0 14px; margin-top:0;">اعمال</button>
+    <button onclick="toggleOrientation()" style="width:auto; padding:0 14px; margin-top:0; background:#3d3d5a;">🔄 چرخش</button>
+  </div>
+
+  <div id="previewInfo" style="margin:10px 2px; font-size:12px; color:#999; direction:ltr; text-align:left;"></div>
+
+  <div id="previewOuter" style="width:100%; overflow:hidden; border:1px solid #333; border-radius:8px; background:#0a0a0a;">
+    <div id="previewScaler" style="transform-origin: top left;">
+      <iframe id="previewFrame" style="border:0; display:block; background:#fff;"></iframe>
+    </div>
+  </div>
+
+  <p style="font-size:11px; color:#888; margin-top:10px;">
+    آدرس سایت واقعی خودت رو (نه این پنل) وارد کن — مثلاً آدرس GitHub Pages یا دامنه‌ی «دهات».
+    اگه اون سایت هدر X-Frame-Options یا CSP محدودکننده داشته باشه، ممکنه اینجا لود نشه؛ این محدودیت خود سایت مقصده.
   </p>
 
 </div>
@@ -347,6 +382,9 @@ let githubFiles = [];        // [{path, sha, size}]
 let fileDrafts = {};         // path -> { content, sha, dirty }
 let stagedDeletes = new Set();
 let openFilePath = null;
+
+let previewDevice = { name: "Mobile", width: 375, height: 667 };
+let previewInitDone = false;
 
 const BINARY_EXT = /\.(png|jpe?g|gif|webp|ico|bmp|woff2?|ttf|otf|eot|mp3|mp4|mov|webm|pdf|zip|rar|7z|gz|tar)$/i;
 
@@ -623,6 +661,8 @@ function switchTarget(target){
   document.getElementById("githubButtons").style.display = target === "github" ? "flex" : "none";
   document.getElementById("varsPanel").style.display = target === "vars" ? "block" : "none";
   document.getElementById("dbPanel").style.display = target === "db" ? "block" : "none";
+  document.getElementById("previewPanel").style.display = target === "preview" ? "block" : "none";
+  document.getElementById("tabPreview").classList.toggle("active", target === "preview");
   document.getElementById("drawerBtn").style.display = target === "github" ? "inline-block" : "none";
   if(target !== "github") document.getElementById("fileDrawer").style.display = "none";
 
@@ -644,6 +684,8 @@ function switchTarget(target){
       }
     }
     if(githubFiles.length === 0) loadGithubTree();
+  }else if(target === "preview"){
+    initPreviewPanel();
   }
   // vars/db tabs load on-demand via their own buttons, not automatically
 }
@@ -1128,6 +1170,88 @@ function renderQueryResults(rows, meta){
   html += `<div style="margin-top:8px; color:#999; font-size:12px; direction:rtl;">${rows.length} ردیف</div>`;
   box.innerHTML = html;
 }
+
+// ===== RESPONSIVE PREVIEW =====
+
+function initPreviewPanel(){
+  const urlBox = document.getElementById("previewUrl");
+
+  if(!previewInitDone){
+    const saved = localStorage.getItem("previewUrl");
+    if(saved) urlBox.value = saved;
+    document.getElementById("customW").value = previewDevice.width;
+    document.getElementById("customH").value = previewDevice.height;
+    previewInitDone = true;
+  }
+
+  if(urlBox.value && !document.getElementById("previewFrame").src){
+    document.getElementById("previewFrame").src = urlBox.value;
+  }
+
+  renderPreviewFrame();
+}
+
+function loadPreviewUrl(){
+  let val = document.getElementById("previewUrl").value.trim();
+  if(!val) return;
+  if(!/^https?:\/\//i.test(val)) val = "https://" + val;
+
+  document.getElementById("previewUrl").value = val;
+  localStorage.setItem("previewUrl", val);
+  document.getElementById("previewFrame").src = val;
+}
+
+function selectDevice(name, w, h){
+  previewDevice = { name, width: w, height: h };
+  document.getElementById("customW").value = w;
+  document.getElementById("customH").value = h;
+  renderPreviewFrame();
+}
+
+function applyCustomSize(){
+  const w = parseInt(document.getElementById("customW").value, 10);
+  const h = parseInt(document.getElementById("customH").value, 10);
+  if(!w || !h){
+    alert("عرض و ارتفاع رو درست وارد کن");
+    return;
+  }
+  previewDevice = { name: "دلخواه", width: w, height: h };
+  renderPreviewFrame();
+}
+
+function toggleOrientation(){
+  previewDevice = { name: previewDevice.name, width: previewDevice.height, height: previewDevice.width };
+  document.getElementById("customW").value = previewDevice.width;
+  document.getElementById("customH").value = previewDevice.height;
+  renderPreviewFrame();
+}
+
+function renderPreviewFrame(){
+  const outer = document.getElementById("previewOuter");
+  const scaler = document.getElementById("previewScaler");
+  const frame = document.getElementById("previewFrame");
+  if(!outer || !scaler || !frame) return;
+
+  const w = previewDevice.width;
+  const h = previewDevice.height;
+
+  frame.style.width = w + "px";
+  frame.style.height = h + "px";
+  scaler.style.width = w + "px";
+  scaler.style.height = h + "px";
+
+  const available = outer.clientWidth || w;
+  const scale = Math.min(1, available / w);
+
+  scaler.style.transform = `scale(${scale})`;
+  outer.style.height = Math.round(h * scale) + "px";
+
+  document.getElementById("previewInfo").innerText = `${previewDevice.name} — ${w}×${h} (${Math.round(scale * 100)}%)`;
+}
+
+window.addEventListener("resize", () => {
+  if(currentTarget === "preview") renderPreviewFrame();
+});
 
 function setStatus(text){
   document.getElementById("status").innerHTML =
