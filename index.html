@@ -340,7 +340,7 @@ button:disabled{
     <input id="customH" type="number" placeholder="ارتفاع" style="width:auto; flex:1; margin-top:0;">
     <button onclick="applyCustomSize()" style="width:auto; padding:0 14px; margin-top:0;">اعمال</button>
     <button onclick="toggleOrientation()" style="width:auto; padding:0 14px; margin-top:0; background:#3d3d5a;">🔄 چرخش</button>
-    <button onclick="togglePreviewFitMode()" id="fitModeBtn" style="width:auto; padding:0 14px; margin-top:0; background:#5a4d2d;">🔍 فیت به صفحه</button>
+    <button onclick="togglePreviewFitMode()" id="fitModeBtn" style="width:auto; padding:0 14px; margin-top:0; background:#5a4d2d;">📜 سایز واقعی (اسکرول)</button>
   </div>
 
   <div id="previewInfo" style="margin:10px 2px; font-size:12px; color:#999; direction:ltr; text-align:left;"></div>
@@ -384,8 +384,8 @@ let fileDrafts = {};         // path -> { content, sha, dirty }
 let stagedDeletes = new Set();
 let openFilePath = null;
 
-let previewDevice = { name: "Mobile", width: 375, height: 667 };
-let previewFitMode = "fit"; // "fit" = scale to fit screen, "scroll" = real pixel size + pan/scroll (like responsivetesttool.com)
+let previewDevice = { name: "Desktop", width: 1920, height: 1080 };
+let previewFitMode = "scroll"; // "scroll" = real pixel size + pan (reliable, matches how a real computer sees the site); "fit" = scaled down, can black-screen on mobile Safari
 let previewInitDone = false;
 
 const BINARY_EXT = /\.(png|jpe?g|gif|webp|ico|bmp|woff2?|ttf|otf|eot|mp3|mp4|mov|webm|pdf|zip|rar|7z|gz|tar)$/i;
