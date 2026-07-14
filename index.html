@@ -340,6 +340,7 @@ button:disabled{
     <input id="customH" type="number" placeholder="ارتفاع" style="width:auto; flex:1; margin-top:0;">
     <button onclick="applyCustomSize()" style="width:auto; padding:0 14px; margin-top:0;">اعمال</button>
     <button onclick="toggleOrientation()" style="width:auto; padding:0 14px; margin-top:0; background:#3d3d5a;">🔄 چرخش</button>
+    <button onclick="togglePreviewFitMode()" id="fitModeBtn" style="width:auto; padding:0 14px; margin-top:0; background:#5a4d2d;">🔍 فیت به صفحه</button>
   </div>
 
   <div id="previewInfo" style="margin:10px 2px; font-size:12px; color:#999; direction:ltr; text-align:left;"></div>
@@ -384,6 +385,7 @@ let stagedDeletes = new Set();
 let openFilePath = null;
 
 let previewDevice = { name: "Mobile", width: 375, height: 667 };
+let previewFitMode = "fit"; // "fit" = scale to fit screen, "scroll" = real pixel size + pan/scroll (like responsivetesttool.com)
 let previewInitDone = false;
 
 const BINARY_EXT = /\.(png|jpe?g|gif|webp|ico|bmp|woff2?|ttf|otf|eot|mp3|mp4|mov|webm|pdf|zip|rar|7z|gz|tar)$/i;
@@ -1226,6 +1228,13 @@ function toggleOrientation(){
   renderPreviewFrame();
 }
 
+function togglePreviewFitMode(){
+  previewFitMode = previewFitMode === "fit" ? "scroll" : "fit";
+  const btn = document.getElementById("fitModeBtn");
+  btn.innerText = previewFitMode === "fit" ? "🔍 فیت به صفحه" : "📜 سایز واقعی (اسکرول)";
+  renderPreviewFrame();
+}
+
 function renderPreviewFrame(){
   const outer = document.getElementById("previewOuter");
   const scaler = document.getElementById("previewScaler");
@@ -1239,6 +1248,21 @@ function renderPreviewFrame(){
   frame.style.height = h + "px";
   scaler.style.width = w + "px";
   scaler.style.height = h + "px";
+
+  if(previewFitMode === "scroll"){
+    // real pixel size, no CSS transform — pan around with native touch scroll,
+    // exactly like responsivetesttool.com's default (scrollable) behavior
+    scaler.style.transform = "none";
+    outer.style.overflow = "auto";
+    outer.style.maxHeight = "70vh";
+    outer.style.height = "70vh";
+    document.getElementById("previewInfo").innerText = `${previewDevice.name} — ${w}×${h} (سایز واقعی — برای دیدن بقیه‌ش بکش/اسکرول کن)`;
+    return;
+  }
+
+  // fit mode: scale the whole frame down so it's fully visible without scrolling
+  outer.style.overflow = "hidden";
+  outer.style.maxHeight = "none";
 
   const available = outer.clientWidth || w;
   const scale = Math.min(1, available / w);
