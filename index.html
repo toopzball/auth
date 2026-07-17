@@ -1116,7 +1116,9 @@ async function pushAllGithubChanges(){
     let data = await res.json();
 
     if(data.ok){
-      setStatus("✅ پوش شد (" + summary + ")");
+      const skipped = data.skippedDeletes || [];
+      const skipNote = skipped.length ? ` (${skipped.length} مسیر حذفی نادیده گرفته شد چون از قبل وجود نداشت)` : "";
+      setStatus("✅ پوش شد (" + summary + ")" + skipNote);
       for(const e of edits) delete fileDrafts[e.path];
       for(const p of deletes){ delete fileDrafts[p]; stagedDeletes.delete(p); }
       setDirty(false);
