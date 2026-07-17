@@ -253,7 +253,7 @@ button:disabled{
   <input type="file" id="fileUploadInput" multiple style="display:none;" onchange="handleFileUpload(event)">
   <input type="file" id="folderUploadInput" webkitdirectory directory multiple style="display:none;" onchange="handleFolderUpload(event)">
   <p style="font-size:11px; color:#888; margin:8px 0 4px;">
-    روی اسم فایل بزن تا تو ادیتور باز بشه. تیک بزن یعنی فایل برای حذف علامت‌گذاری بشه (یا اگه فایل تازه‌آپلودشده/جدیده، لغوش می‌کنه) — تا وقتی «پوش همه» رو نزنی چیزی واقعاً اعمال نمی‌شه.
+    روی اسم فایل بزن تا تو ادیتور باز بشه. تیک بزن یعنی فایل برای حذف علامت‌گذاری بشه (یا اگه فایل تازه‌آپلودشده/جدیده، لغوش می‌کنه). تیک کنار یه پوشه یعنی همه‌ی فایل‌های داخلش (حتی زیرپوشه‌ها) برای حذف علامت بخورن. تا وقتی «پوش همه» رو نزنی چیزی واقعاً اعمال نمی‌شه.
   </p>
   <div id="fileTreeList" style="margin-top:6px; font-size:13px;"></div>
 </div>
@@ -812,6 +812,14 @@ function buildFileTreeData(entries){
   return root;
 }
 
+function collectDescendantPaths(node){
+  let paths = node.files.map(f => f.path);
+  for(const key of Object.keys(node.children)){
+    paths = paths.concat(collectDescendantPaths(node.children[key]));
+  }
+  return paths;
+}
+
 function renderFileRow(f, depth){
   const isBinary = BINARY_EXT.test(f.path);
   const isOpen = f.path === openFilePath;
@@ -837,10 +845,19 @@ function renderFolderNode(node, depth){
     const child = node.children[fname];
     const isExpanded = expandedFolders.has(child.fullPath);
 
-    html += `<div onclick="toggleFolder('${escapeHtml(child.fullPath)}')" style="display:flex; align-items:center; gap:6px; padding:6px 2px 6px ${pad}px; cursor:pointer; color:#ccc;">
-      <span>${isExpanded ? "📂" : "📁"}</span>
-      <span style="flex:1; direction:ltr; text-align:left;">${escapeHtml(fname)}</span>
-      <span style="color:#666; font-size:11px;">${isExpanded ? "▾" : "▸"}</span>
+    const descendantPaths = collectDescendantPaths(child);
+    const existingPaths = descendantPaths.filter(p => githubFiles.some(f => f.path === p));
+    const allExistingStaged = existingPaths.length > 0 && existingPaths.every(p => stagedDeletes.has(p));
+    const someExistingStaged = existingPaths.some(p => stagedDeletes.has(p));
+    const state = allExistingStaged ? "checked" : (someExistingStaged ? "indeterminate" : "unchecked");
+
+    html += `<div style="display:flex; align-items:center; gap:6px; padding:6px 2px 6px ${pad}px; ${state === "checked" ? "opacity:.6;" : ""}">
+      <input type="checkbox" class="folderCheckbox" data-folder="${escapeHtml(child.fullPath)}" data-paths='${escapeHtml(JSON.stringify(descendantPaths))}' data-state="${state}" ${state === "checked" ? "checked" : ""} style="width:auto; margin:0; flex-shrink:0;">
+      <span onclick="toggleFolder('${escapeHtml(child.fullPath)}')" style="display:flex; align-items:center; gap:6px; flex:1; cursor:pointer; color:#ccc;">
+        <span>${isExpanded ? "📂" : "📁"}</span>
+        <span style="flex:1; direction:ltr; text-align:left;">${escapeHtml(fname)}</span>
+        <span style="color:#666; font-size:11px;">${isExpanded ? "▾" : "▸"}</span>
+      </span>
     </div>`;
 
     if(isExpanded){
@@ -886,6 +903,29 @@ function renderFileTree(){
         }
       }else{
         if(cb.checked) stagedDeletes.add(p); else stagedDeletes.delete(p);
+      }
+      renderFileTree();
+    });
+  });
+
+  box.querySelectorAll(".folderCheckbox").forEach(cb => {
+    if(cb.dataset.state === "indeterminate") cb.indeterminate = true;
+
+    cb.addEventListener("change", () => {
+      const paths = JSON.parse(cb.dataset.paths);
+
+      if(cb.checked){
+        for(const p of paths){
+          const isNewFile = fileDrafts[p] && fileDrafts[p].isNew && !githubFiles.some(f => f.path === p);
+          if(isNewFile){
+            delete fileDrafts[p];
+            if(openFilePath === p){ openFilePath = null; cm.setValue(""); updateCharCount(); }
+          }else{
+            stagedDeletes.add(p);
+          }
+        }
+      }else{
+        for(const p of paths) stagedDeletes.delete(p);
       }
       renderFileTree();
     });
