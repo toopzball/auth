@@ -739,6 +739,7 @@ function switchRepo(repo){
   stagedDeletes = new Set();
   openFilePath = null;
   githubFiles = [];
+  expandedFolders = new Set();
   cm.setValue("");
   updateCharCount();
   setDirty(false);
@@ -764,10 +765,93 @@ async function loadGithubTree(){
     }
 
     githubFiles = data.files || [];
+    if(openFilePath) expandAncestors(openFilePath);
     renderFileTree();
   }catch(e){
     box.innerHTML = "خطا در اتصال ❌";
   }
+}
+
+let expandedFolders = new Set();
+
+function expandAncestors(path){
+  const parts = path.split("/");
+  let cur = "";
+  for(let i = 0; i < parts.length - 1; i++){
+    cur = cur ? cur + "/" + parts[i] : parts[i];
+    expandedFolders.add(cur);
+  }
+}
+
+function toggleFolder(path){
+  if(expandedFolders.has(path)) expandedFolders.delete(path); else expandedFolders.add(path);
+  renderFileTree();
+}
+
+function buildFileTreeData(entries){
+  const root = { name: "", fullPath: "", children: {}, files: [] };
+  for(const entry of entries){
+    const parts = entry.path.split("/");
+    let node = root;
+    for(let i = 0; i < parts.length - 1; i++){
+      const part = parts[i];
+      if(!node.children[part]){
+        node.children[part] = {
+          name: part,
+          fullPath: node.fullPath ? node.fullPath + "/" + part : part,
+          children: {},
+          files: []
+        };
+      }
+      node = node.children[part];
+    }
+    node.files.push({ ...entry, name: parts[parts.length - 1] });
+  }
+  return root;
+}
+
+function renderFileRow(f, depth){
+  const isBinary = BINARY_EXT.test(f.path);
+  const isOpen = f.path === openFilePath;
+  const isDirty = fileDrafts[f.path] && fileDrafts[f.path].dirty;
+  const isDeleted = stagedDeletes.has(f.path);
+  const canOpen = !isBinary;
+  const pad = 8 + depth * 18;
+
+  return `<div style="display:flex; align-items:center; gap:8px; padding:5px 2px 5px ${pad}px; border-bottom:1px solid #292929; ${isDeleted ? "opacity:.45; text-decoration:line-through;" : ""}">
+    <input type="checkbox" data-path="${escapeHtml(f.path)}" data-new="${f.isNewFile ? "1" : "0"}" class="fileCheckbox" ${isDeleted ? "checked" : ""} style="width:auto; margin:0; flex-shrink:0;">
+    <span onclick="${canOpen ? `openGithubFile('${escapeHtml(f.path)}')` : ""}" style="flex:1; direction:ltr; text-align:left; cursor:${canOpen ? "pointer" : "default"}; color:${isOpen ? "#8b5cf6" : (f.isNewFile ? "#7cff7c" : (isBinary ? "#666" : "#eee"))}; overflow-wrap:anywhere;">
+      ${f.isNewFile ? "🆕" : (isBinary ? "🔒" : "📄")} ${escapeHtml(f.name)} ${isDirty ? '<span style="color:#ffcc55;">●</span>' : ""}
+    </span>
+  </div>`;
+}
+
+function renderFolderNode(node, depth){
+  let html = "";
+  const pad = 8 + depth * 18;
+
+  const folderNames = Object.keys(node.children).sort((a, b) => a.localeCompare(b));
+  for(const fname of folderNames){
+    const child = node.children[fname];
+    const isExpanded = expandedFolders.has(child.fullPath);
+
+    html += `<div onclick="toggleFolder('${escapeHtml(child.fullPath)}')" style="display:flex; align-items:center; gap:6px; padding:6px 2px 6px ${pad}px; cursor:pointer; color:#ccc;">
+      <span>${isExpanded ? "📂" : "📁"}</span>
+      <span style="flex:1; direction:ltr; text-align:left;">${escapeHtml(fname)}</span>
+      <span style="color:#666; font-size:11px;">${isExpanded ? "▾" : "▸"}</span>
+    </div>`;
+
+    if(isExpanded){
+      html += renderFolderNode(child, depth + 1);
+    }
+  }
+
+  const files = node.files.sort((a, b) => a.name.localeCompare(b.name));
+  for(const f of files){
+    html += renderFileRow(f, depth);
+  }
+
+  return html;
 }
 
 function renderFileTree(){
@@ -784,23 +868,8 @@ function renderFileTree(){
     return;
   }
 
-  let html = "";
-  for(const f of entries){
-    const isBinary = BINARY_EXT.test(f.path);
-    const isOpen = f.path === openFilePath;
-    const isDirty = fileDrafts[f.path] && fileDrafts[f.path].dirty;
-    const isDeleted = stagedDeletes.has(f.path);
-    const canOpen = !isBinary;
-
-    html += `<div style="display:flex; align-items:center; gap:8px; padding:5px 2px; border-bottom:1px solid #292929; ${isDeleted ? "opacity:.45; text-decoration:line-through;" : ""}">
-      <input type="checkbox" data-path="${escapeHtml(f.path)}" data-new="${f.isNewFile ? "1" : "0"}" class="fileCheckbox" ${isDeleted ? "checked" : ""} style="width:auto; margin:0;">
-      <span onclick="${canOpen ? `openGithubFile('${escapeHtml(f.path)}')` : ""}" style="flex:1; direction:ltr; text-align:left; cursor:${canOpen ? "pointer" : "default"}; color:${isOpen ? "#8b5cf6" : (f.isNewFile ? "#7cff7c" : (isBinary ? "#666" : "#eee"))};">
-        ${f.isNewFile ? "🆕" : (isBinary ? "🔒" : "📄")} ${escapeHtml(f.path)} ${isDirty ? '<span style="color:#ffcc55;">●</span>' : ""}
-      </span>
-    </div>`;
-  }
-
-  box.innerHTML = html;
+  const tree = buildFileTreeData(entries);
+  box.innerHTML = renderFolderNode(tree, 0);
 
   box.querySelectorAll(".fileCheckbox").forEach(cb => {
     cb.addEventListener("change", () => {
@@ -828,6 +897,7 @@ async function openGithubFile(path){
   }
 
   openFilePath = path;
+  expandAncestors(path);
 
   // already open/edited/uploaded earlier in this session — just show the local draft, no re-fetch
   if(fileDrafts[path] && fileDrafts[path].content !== undefined){
