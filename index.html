@@ -239,12 +239,19 @@ button:disabled{
   <button onclick="toggleTheme()" id="themeBtn">☀️ روشن</button>
 </div>
 
-<div id="fileDrawer" style="display:none; margin-top:10px; background:#151515; border-radius:8px; padding:10px; max-height:280px; overflow:auto; border:1px solid #333;">
+<div id="fileDrawer" style="display:none; margin-top:10px; background:#151515; border-radius:8px; padding:10px; max-height:340px; overflow:auto; border:1px solid #333;">
   <div class="btn-row">
-    <button onclick="loadGithubTree()" style="background:#2a2a2a;">🔄 بروزرسانی لیست</button>
+    <button onclick="switchRepo('1')" id="repoBtn1" class="tab-btn active" style="width:auto; flex:1; padding:8px; font-size:12px;">📦 ریپوی اصلی</button>
+    <button onclick="switchRepo('2')" id="repoBtn2" class="tab-btn" style="width:auto; flex:1; padding:8px; font-size:12px;">📦 ریپوی دوم</button>
   </div>
+  <div class="btn-row" style="margin-top:6px;">
+    <button onclick="loadGithubTree()" style="background:#2a2a2a;">🔄 بروزرسانی لیست</button>
+    <button onclick="triggerFileUpload()" style="background:#2d5a3d;">📤 آپلود فایل</button>
+    <button onclick="createNewFile()" style="background:#3d3d5a;">➕ فایل جدید</button>
+  </div>
+  <input type="file" id="fileUploadInput" multiple style="display:none;" onchange="handleFileUpload(event)">
   <p style="font-size:11px; color:#888; margin:8px 0 4px;">
-    روی اسم فایل بزن تا تو ادیتور باز بشه. تیک بزن یعنی فایل برای حذف علامت‌گذاری بشه (تا وقتی «پوش همه» رو نزنی چیزی واقعاً حذف نمی‌شه).
+    روی اسم فایل بزن تا تو ادیتور باز بشه. تیک بزن یعنی فایل برای حذف علامت‌گذاری بشه (یا اگه فایل تازه‌آپلودشده/جدیده، لغوش می‌کنه) — تا وقتی «پوش همه» رو نزنی چیزی واقعاً اعمال نمی‌شه.
   </p>
   <div id="fileTreeList" style="margin-top:6px; font-size:13px;"></div>
 </div>
@@ -390,6 +397,7 @@ let githubFiles = [];        // [{path, sha, size}]
 let fileDrafts = {};         // path -> { content, sha, dirty }
 let stagedDeletes = new Set();
 let openFilePath = null;
+let currentRepo = "1"; // "1" = primary repo, "2" = second repo (added later, via *_2 env vars)
 
 let previewDevice = { name: "Desktop", width: 1920, height: 1080 };
 let previewFitMode = "scroll"; // "scroll" = real pixel size + pan (reliable, matches how a real computer sees the site); "fit" = scaled down, can black-screen on mobile Safari
@@ -718,12 +726,36 @@ function toggleFileDrawer(){
   }
 }
 
+function switchRepo(repo){
+  if(repo === currentRepo) return;
+
+  const hasUnpushed = Object.values(fileDrafts).some(d => d.dirty) || stagedDeletes.size > 0;
+  if(hasUnpushed){
+    if(!confirm("تغییرات پوش‌نشده داری که با عوض‌کردن ریپو از بین می‌رن. ادامه بدم؟")) return;
+  }
+
+  currentRepo = repo;
+  fileDrafts = {};
+  stagedDeletes = new Set();
+  openFilePath = null;
+  githubFiles = [];
+  cm.setValue("");
+  updateCharCount();
+  setDirty(false);
+
+  document.getElementById("repoBtn1").classList.toggle("active", repo === "1");
+  document.getElementById("repoBtn2").classList.toggle("active", repo === "2");
+
+  setStatus(repo === "1" ? "روی ریپوی اصلی هستی" : "روی ریپوی دوم هستی");
+  loadGithubTree();
+}
+
 async function loadGithubTree(){
   const box = document.getElementById("fileTreeList");
   box.innerHTML = "در حال بارگذاری...";
 
   try{
-    let res = await fetch(AUTH+"/github/tree", { headers:{ Authorization: localStorage.session } });
+    let res = await fetch(AUTH+"/github/tree?repo="+currentRepo, { headers:{ Authorization: localStorage.session } });
     let data = await res.json();
 
     if(!data.ok){
@@ -741,22 +773,29 @@ async function loadGithubTree(){
 function renderFileTree(){
   const box = document.getElementById("fileTreeList");
 
-  if(!githubFiles.length){
+  const newPaths = Object.keys(fileDrafts).filter(p => fileDrafts[p].isNew && !githubFiles.some(f => f.path === p));
+  const entries = [
+    ...newPaths.map(p => ({ path: p, isNewFile: true })),
+    ...githubFiles.map(f => ({ path: f.path, isNewFile: false }))
+  ];
+
+  if(!entries.length){
     box.innerHTML = "فایلی پیدا نشد.";
     return;
   }
 
   let html = "";
-  for(const f of githubFiles){
+  for(const f of entries){
     const isBinary = BINARY_EXT.test(f.path);
     const isOpen = f.path === openFilePath;
     const isDirty = fileDrafts[f.path] && fileDrafts[f.path].dirty;
     const isDeleted = stagedDeletes.has(f.path);
+    const canOpen = !isBinary;
 
     html += `<div style="display:flex; align-items:center; gap:8px; padding:5px 2px; border-bottom:1px solid #292929; ${isDeleted ? "opacity:.45; text-decoration:line-through;" : ""}">
-      <input type="checkbox" data-path="${escapeHtml(f.path)}" class="fileCheckbox" ${isDeleted ? "checked" : ""} style="width:auto; margin:0;">
-      <span onclick="${isBinary ? "" : `openGithubFile('${escapeHtml(f.path)}')`}" style="flex:1; direction:ltr; text-align:left; cursor:${isBinary ? "default" : "pointer"}; color:${isOpen ? "#8b5cf6" : (isBinary ? "#666" : "#eee")};">
-        ${isBinary ? "🔒" : "📄"} ${escapeHtml(f.path)} ${isDirty ? '<span style="color:#ffcc55;">●</span>' : ""}
+      <input type="checkbox" data-path="${escapeHtml(f.path)}" data-new="${f.isNewFile ? "1" : "0"}" class="fileCheckbox" ${isDeleted ? "checked" : ""} style="width:auto; margin:0;">
+      <span onclick="${canOpen ? `openGithubFile('${escapeHtml(f.path)}')` : ""}" style="flex:1; direction:ltr; text-align:left; cursor:${canOpen ? "pointer" : "default"}; color:${isOpen ? "#8b5cf6" : (f.isNewFile ? "#7cff7c" : (isBinary ? "#666" : "#eee"))};">
+        ${f.isNewFile ? "🆕" : (isBinary ? "🔒" : "📄")} ${escapeHtml(f.path)} ${isDirty ? '<span style="color:#ffcc55;">●</span>' : ""}
       </span>
     </div>`;
   }
@@ -766,7 +805,17 @@ function renderFileTree(){
   box.querySelectorAll(".fileCheckbox").forEach(cb => {
     cb.addEventListener("change", () => {
       const p = cb.dataset.path;
-      if(cb.checked) stagedDeletes.add(p); else stagedDeletes.delete(p);
+      const isNewFile = cb.dataset.new === "1";
+
+      if(isNewFile){
+        // not yet on GitHub — unticking just discards the local draft/upload
+        if(cb.checked){
+          delete fileDrafts[p];
+          if(openFilePath === p){ openFilePath = null; cm.setValue(""); updateCharCount(); }
+        }
+      }else{
+        if(cb.checked) stagedDeletes.add(p); else stagedDeletes.delete(p);
+      }
       renderFileTree();
     });
   });
@@ -780,7 +829,7 @@ async function openGithubFile(path){
 
   openFilePath = path;
 
-  // already open/edited earlier in this session — just show the local draft, no re-fetch
+  // already open/edited/uploaded earlier in this session — just show the local draft, no re-fetch
   if(fileDrafts[path] && fileDrafts[path].content !== undefined){
     cm.setValue(fileDrafts[path].content);
     cm.setOption("mode", modeForPath(path));
@@ -794,7 +843,7 @@ async function openGithubFile(path){
   setStatus("در حال دریافت " + path + " ...");
 
   try{
-    let res = await fetch(AUTH+"/github/file?path=" + encodeURIComponent(path), { headers:{ Authorization: localStorage.session } });
+    let res = await fetch(AUTH+"/github/file?path=" + encodeURIComponent(path) + "&repo=" + currentRepo, { headers:{ Authorization: localStorage.session } });
     let data = await res.json();
 
     if(!data.ok){
@@ -802,7 +851,7 @@ async function openGithubFile(path){
       return;
     }
 
-    fileDrafts[path] = { content: data.code, sha: data.sha, dirty: false };
+    fileDrafts[path] = { content: data.code, sha: data.sha, dirty: false, encoding: "utf-8" };
     cm.setValue(data.code);
     cm.setOption("mode", modeForPath(path));
     setDirty(false);
@@ -826,6 +875,72 @@ async function pullCurrentGithubFile(){
   openGithubFile(openFilePath);
 }
 
+// ===== UPLOAD / NEW FILE =====
+
+function triggerFileUpload(){
+  const folder = prompt("تو کدوم پوشه آپلود بشه؟ (خالی بذار برای ریشه‌ی ریپو، بدون / اول و آخر)", "");
+  window._uploadTargetFolder = folder ? folder.replace(/^\/+|\/+$/g, "") : "";
+  document.getElementById("fileUploadInput").click();
+}
+
+function handleFileUpload(e){
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+
+  let done = 0;
+  for(const file of files){
+    addUploadedFile(file, () => {
+      done++;
+      if(done === files.length){
+        e.target.value = "";
+        renderFileTree();
+        setStatus(`${files.length} فایل برای آپلود آماده شد — برای اعمال «پوش همه‌ی تغییرات» رو بزن`);
+      }
+    });
+  }
+}
+
+function addUploadedFile(file, cb){
+  const isBinary = BINARY_EXT.test(file.name);
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    const folder = window._uploadTargetFolder || "";
+    const path = folder ? (folder + "/" + file.name) : file.name;
+
+    if(isBinary){
+      const b64 = String(reader.result).split(",")[1] || "";
+      fileDrafts[path] = { content: b64, dirty: true, encoding: "base64", isNew: !githubFiles.some(f => f.path === path) };
+    }else{
+      fileDrafts[path] = { content: String(reader.result), dirty: true, encoding: "utf-8", isNew: !githubFiles.some(f => f.path === path) };
+    }
+    cb();
+  };
+
+  reader.onerror = () => {
+    setStatus("خطا در خوندن فایل " + file.name + " ❌");
+    cb();
+  };
+
+  if(isBinary) reader.readAsDataURL(file); else reader.readAsText(file);
+}
+
+function createNewFile(){
+  const path = prompt("مسیر کامل فایل جدید رو بنویس (مثلاً css/new-style.css):", "");
+  if(!path) return;
+
+  const clean = path.replace(/^\/+/, "").trim();
+  if(!clean) return;
+
+  if(githubFiles.some(f => f.path === clean) || fileDrafts[clean]){
+    alert("فایلی با این مسیر از قبل وجود داره یا قبلاً باز شده.");
+    return;
+  }
+
+  fileDrafts[clean] = { content: "", dirty: true, encoding: "utf-8", isNew: true };
+  openGithubFile(clean);
+}
+
 async function pushAllGithubChanges(){
   if(openFilePath && cm && fileDrafts[openFilePath]){
     fileDrafts[openFilePath].content = cm.getValue();
@@ -833,7 +948,7 @@ async function pushAllGithubChanges(){
 
   const edits = Object.keys(fileDrafts)
     .filter(p => fileDrafts[p].dirty && !stagedDeletes.has(p))
-    .map(p => ({ path: p, content: fileDrafts[p].content }));
+    .map(p => ({ path: p, content: fileDrafts[p].content, encoding: fileDrafts[p].encoding || "utf-8" }));
 
   const deletes = Array.from(stagedDeletes);
 
@@ -842,7 +957,7 @@ async function pushAllGithubChanges(){
     return;
   }
 
-  const summary = `${edits.length} فایل ویرایش، ${deletes.length} فایل حذف`;
+  const summary = `${edits.length} فایل ویرایش/آپلود، ${deletes.length} فایل حذف`;
   if(!confirm(`این تغییرات پوش بشه؟ (${summary})`)) return;
 
   setStatus("در حال Push کردن همه‌ی تغییرات...");
@@ -854,6 +969,7 @@ async function pushAllGithubChanges(){
       body: JSON.stringify({
         edits,
         deletes,
+        repo: currentRepo,
         message: "Batch update via Private Panel (" + summary + ")"
       })
     });
@@ -1251,15 +1367,17 @@ function renderPreviewFrame(){
   const w = previewDevice.width;
   const h = previewDevice.height;
 
-  frame.style.width = w + "px";
-  frame.style.height = h + "px";
-  scaler.style.width = w + "px";
-  scaler.style.height = h + "px";
+  // scaler is no longer used for CSS transform — kept as a plain wrapper
+  scaler.style.transform = "none";
+  scaler.style.width = "auto";
+  scaler.style.height = "auto";
 
   if(previewFitMode === "scroll"){
-    // real pixel size, no CSS transform — pan around with native touch scroll,
+    // real pixel size, no zoom — pan around with native touch scroll,
     // exactly like responsivetesttool.com's default (scrollable) behavior
-    scaler.style.transform = "none";
+    frame.style.width = w + "px";
+    frame.style.height = h + "px";
+    frame.style.zoom = 1;
     outer.style.overflow = "auto";
     outer.style.maxHeight = "70vh";
     outer.style.height = "70vh";
@@ -1267,17 +1385,23 @@ function renderPreviewFrame(){
     return;
   }
 
-  // fit mode: scale the whole frame down so it's fully visible without scrolling
+  // fit mode: shrink with CSS "zoom" instead of "transform: scale()".
+  // Unlike transform, zoom actually shrinks the layout/scroll size too — so the
+  // iframe's own internal scrolling keeps working normally (this is what was
+  // broken before: transform looked right but froze on the first screenful).
   outer.style.overflow = "hidden";
-  outer.style.maxHeight = "none";
+  outer.style.maxHeight = "75vh";
 
   const available = outer.clientWidth || w;
   const scale = Math.min(1, available / w);
 
-  scaler.style.transform = `scale(${scale})`;
+  frame.style.width = w + "px";
+  frame.style.height = h + "px";
+  frame.style.zoom = scale;
+
   outer.style.height = Math.round(h * scale) + "px";
 
-  document.getElementById("previewInfo").innerText = `${previewDevice.name} — ${w}×${h} (${Math.round(scale * 100)}%)`;
+  document.getElementById("previewInfo").innerText = `${previewDevice.name} — ${w}×${h} (${Math.round(scale * 100)}٪) — داخل قاب اسکرول کن تا بقیه‌ی صفحه رو ببینی`;
 }
 
 window.addEventListener("resize", () => {
