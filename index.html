@@ -247,9 +247,11 @@ button:disabled{
   <div class="btn-row" style="margin-top:6px;">
     <button onclick="loadGithubTree()" style="background:#2a2a2a;">🔄 بروزرسانی لیست</button>
     <button onclick="triggerFileUpload()" style="background:#2d5a3d;">📤 آپلود فایل</button>
+    <button onclick="triggerFolderUpload()" style="background:#2d5a3d;">🗂 آپلود پوشه</button>
     <button onclick="createNewFile()" style="background:#3d3d5a;">➕ فایل جدید</button>
   </div>
   <input type="file" id="fileUploadInput" multiple style="display:none;" onchange="handleFileUpload(event)">
+  <input type="file" id="folderUploadInput" webkitdirectory directory multiple style="display:none;" onchange="handleFolderUpload(event)">
   <p style="font-size:11px; color:#888; margin:8px 0 4px;">
     روی اسم فایل بزن تا تو ادیتور باز بشه. تیک بزن یعنی فایل برای حذف علامت‌گذاری بشه (یا اگه فایل تازه‌آپلودشده/جدیده، لغوش می‌کنه) — تا وقتی «پوش همه» رو نزنی چیزی واقعاً اعمال نمی‌شه.
   </p>
@@ -953,6 +955,12 @@ function triggerFileUpload(){
   document.getElementById("fileUploadInput").click();
 }
 
+function triggerFolderUpload(){
+  const folder = prompt("این پوشه داخل کدوم مسیر از ریپو قرار بگیره؟ (خالی = ریشه‌ی ریپو)", "");
+  window._uploadTargetFolder = folder ? folder.replace(/^\/+|\/+$/g, "") : "";
+  document.getElementById("folderUploadInput").click();
+}
+
 function handleFileUpload(e){
   const files = Array.from(e.target.files || []);
   if(!files.length) return;
@@ -970,13 +978,35 @@ function handleFileUpload(e){
   }
 }
 
-function addUploadedFile(file, cb){
+function handleFolderUpload(e){
+  const files = Array.from(e.target.files || []);
+  if(!files.length){
+    setStatus("مرورگرت انتخاب پوشه رو پشتیبانی نکرد — از «📤 آپلود فایل» با انتخاب چندتایی استفاده کن ❌");
+    return;
+  }
+
+  let done = 0;
+  for(const file of files){
+    // webkitRelativePath keeps the folder structure, e.g. "images/icons/logo.png"
+    addUploadedFile(file, () => {
+      done++;
+      if(done === files.length){
+        e.target.value = "";
+        renderFileTree();
+        setStatus(`${files.length} فایل از پوشه برای آپلود آماده شد — برای اعمال «پوش همه‌ی تغییرات» رو بزن`);
+      }
+    }, file.webkitRelativePath || file.name);
+  }
+}
+
+function addUploadedFile(file, cb, relativePath){
   const isBinary = BINARY_EXT.test(file.name);
   const reader = new FileReader();
 
   reader.onload = () => {
     const folder = window._uploadTargetFolder || "";
-    const path = folder ? (folder + "/" + file.name) : file.name;
+    const rel = relativePath || file.name;
+    const path = folder ? (folder + "/" + rel) : rel;
 
     if(isBinary){
       const b64 = String(reader.result).split(",")[1] || "";
