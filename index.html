@@ -224,6 +224,11 @@ button:disabled{
 
 <p id="status"><span class="dirty-dot" id="dirtyDot">●</span>آماده</p>
 
+<div id="workerSelectorRow" class="btn-row" style="display:none; margin-top:0;">
+  <button onclick="switchWorker('1')" class="tab-btn active workerSelectBtn" data-worker="1" style="width:auto; flex:1; padding:8px; font-size:12px;">📦 ورکر اصلی</button>
+  <button onclick="switchWorker('2')" class="tab-btn workerSelectBtn" data-worker="2" style="width:auto; flex:1; padding:8px; font-size:12px;">📦 ورکر دوم</button>
+</div>
+
 <div class="toolbar">
   <button onclick="formatCode()" title="فرمت خودکار کد">🧹 Format</button>
   <button onclick="toggleWordWrap()" id="wrapBtn">↩ Wrap: Off</button>
@@ -279,6 +284,11 @@ button:disabled{
 <div id="varsPanel" style="display:none; margin-top:15px;">
 
   <div class="btn-row">
+    <button onclick="switchWorker('1')" class="tab-btn active workerSelectBtn" data-worker="1" style="width:auto; flex:1; padding:8px; font-size:12px;">📦 ورکر اصلی</button>
+    <button onclick="switchWorker('2')" class="tab-btn workerSelectBtn" data-worker="2" style="width:auto; flex:1; padding:8px; font-size:12px;">📦 ورکر دوم</button>
+  </div>
+
+  <div class="btn-row" style="margin-top:6px;">
     <button onclick="loadVars()" style="background:#2d5a3d;">🔄 بارگذاری لیست</button>
   </div>
 
@@ -400,6 +410,7 @@ let fileDrafts = {};         // path -> { content, sha, dirty }
 let stagedDeletes = new Set();
 let openFilePath = null;
 let currentRepo = "1"; // "1" = primary repo, "2" = second repo (added later, via *_2 env vars)
+let currentWorker = "1"; // "1" = primary Cloudflare Worker, "2" = second worker (possibly different CF account)
 
 let previewDevice = { name: "Desktop", width: 1920, height: 1080 };
 let previewFitMode = "scroll"; // "scroll" = real pixel size + pan (reliable, matches how a real computer sees the site); "fit" = scaled down, can black-screen on mobile Safari
@@ -683,6 +694,7 @@ function switchTarget(target){
   document.getElementById("previewPanel").style.display = target === "preview" ? "block" : "none";
   document.getElementById("tabPreview").classList.toggle("active", target === "preview");
   document.getElementById("drawerBtn").style.display = target === "github" ? "inline-block" : "none";
+  document.getElementById("workerSelectorRow").style.display = target === "worker" ? "flex" : "none";
   if(target !== "github") document.getElementById("fileDrawer").style.display = "none";
 
   if(target === "worker"){
@@ -726,6 +738,30 @@ function toggleFileDrawer(){
   if(!showing && githubFiles.length === 0){
     loadGithubTree();
   }
+}
+
+function switchWorker(w){
+  if(w === currentWorker) return;
+
+  if(currentTarget === "worker" && isDirty){
+    if(!confirm("تغییرات ذخیره‌نشده داری که با عوض‌کردن ورکر از بین می‌رن. ادامه بدم؟")) return;
+  }
+
+  currentWorker = w;
+
+  document.querySelectorAll(".workerSelectBtn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.worker === w);
+  });
+
+  const varsBox = document.getElementById("varsList");
+  if(varsBox) varsBox.innerHTML = "هنوز بارگذاری نشده — روی «بارگذاری لیست» بزن.";
+
+  if(currentTarget === "worker"){
+    setDirty(false);
+    loadCode();
+  }
+
+  setStatus(w === "1" ? "روی ورکر اصلی هستی" : "روی ورکر دوم هستی");
 }
 
 function switchRepo(repo){
@@ -1143,7 +1179,7 @@ async function pullFromCloudflare(){
   setStatus("در حال دریافت از Cloudflare...");
 
   try{
-    let res = await fetch(AUTH+"/pull", { headers:{ Authorization:localStorage.session } });
+    let res = await fetch(AUTH+"/pull?worker="+currentWorker, { headers:{ Authorization:localStorage.session } });
     let data = await res.json();
 
     if(data.ok){
@@ -1165,11 +1201,14 @@ async function pullFromCloudflare(){
 // LOAD
 async function loadCode(){
   try{
-    let res = await fetch(AUTH+"/load", { headers:{ Authorization:localStorage.session } });
+    let res = await fetch(AUTH+"/load?worker="+currentWorker, { headers:{ Authorization:localStorage.session } });
     let data = await res.json();
     if(data.code){
       cm.setValue(data.code);
       setDirty(false);
+      updateCharCount();
+    }else{
+      cm.setValue("");
       updateCharCount();
     }
   }catch(e){
@@ -1185,7 +1224,7 @@ async function saveCode(){
     let res = await fetch(AUTH+"/save", {
       method:"POST",
       headers:{ "Content-Type":"application/json", Authorization:localStorage.session },
-      body:JSON.stringify({ code: cm.getValue() })
+      body:JSON.stringify({ code: cm.getValue(), worker: currentWorker })
     });
 
     let data = await res.json();
@@ -1208,7 +1247,8 @@ async function deployWorker(){
   try{
     let res = await fetch(AUTH+"/deploy", {
       method:"POST",
-      headers:{ Authorization:localStorage.session }
+      headers:{ "Content-Type":"application/json", Authorization:localStorage.session },
+      body: JSON.stringify({ worker: currentWorker })
     });
 
     let data = await res.json();
@@ -1216,7 +1256,7 @@ async function deployWorker(){
     if(data.success){
       setStatus("Deploy موفق شد ✅");
     }else{
-      let errText = (data.errors && data.errors.length) ? JSON.stringify(data.errors) : "";
+      let errText = (data.errors && data.errors.length) ? JSON.stringify(data.errors) : (data.error ? data.error : "");
       setStatus("خطا در Deploy ❌ " + errText);
       console.log(data);
     }
@@ -1244,7 +1284,7 @@ async function loadVars(){
   box.innerHTML = "در حال بارگذاری...";
 
   try{
-    let res = await fetch(AUTH+"/vars/list", { headers:{ Authorization: localStorage.session } });
+    let res = await fetch(AUTH+"/vars/list?worker="+currentWorker, { headers:{ Authorization: localStorage.session } });
     let data = await res.json();
 
     if(!data.ok){
@@ -1302,7 +1342,7 @@ async function setVar(){
     let res = await fetch(AUTH+"/vars/set", {
       method:"POST",
       headers:{ "Content-Type":"application/json", Authorization: localStorage.session },
-      body: JSON.stringify({ name, type, value })
+      body: JSON.stringify({ name, type, value, worker: currentWorker })
     });
     let data = await res.json();
 
@@ -1329,7 +1369,7 @@ async function deleteVar(name){
     let res = await fetch(AUTH+"/vars/delete", {
       method:"POST",
       headers:{ "Content-Type":"application/json", Authorization: localStorage.session },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, worker: currentWorker })
     });
     let data = await res.json();
 
